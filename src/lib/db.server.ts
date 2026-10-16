@@ -1,30 +1,19 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { dirname } from "node:path";
+import { and, desc, eq, or, sql } from "drizzle-orm";
+import { admins, events, players, sessions } from "./schema.server";
+import { openStore } from "./store.server";
 import { areas, nextUnlock, unlockCodes } from "./game.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
-mkdirSync(dirname(databasePath), { recursive: true });
-const db = new DatabaseSync(databasePath);
+const db = openStore(databasePath);
 export function closeStore() {
-  db.close();
+  db.$client.close();
 }
-db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,name TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',progress INTEGER NOT NULL DEFAULT 0,created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS players(token TEXT PRIMARY KEY,name TEXT NOT NULL,session_id TEXT NOT NULL REFERENCES sessions(id));
-CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,session_id TEXT,message TEXT NOT NULL,created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS admins(token TEXT PRIMARY KEY);
-`);
-if (!db.prepare("SELECT id FROM sessions LIMIT 1").get())
-  db.prepare("INSERT INTO sessions(id,name) VALUES (?,?)").run(
-    "signal-house",
-    "The Signal House",
-  );
+if (!db.select({ id: sessions.id }).from(sessions).limit(1).get())
+  db.insert(sessions)
+    .values({ id: "signal-house", name: "The Signal House" })
+    .run();
 function event(id: string | null, message: string) {
-  db.prepare("INSERT INTO events(session_id,message) VALUES (?,?)").run(
-    id,
-    message,
-  );
+  db.insert(events).values({ session_id: id, message }).run();
 }
 function cookie(request: Request, name: string) {
   return (
@@ -38,14 +27,17 @@ function cookie(request: Request, name: string) {
 function admin(request: Request) {
   if (process.env.HA_URL && !process.env.ADMIN_KEY) return false;
   return !!db
-    .prepare("SELECT token FROM admins WHERE token=?")
-    .get(cookie(request, "gm"));
+    .select()
+    .from(admins)
+    .where(eq(admins.token, cookie(request, "gm")))
+    .get();
 }
 function player(request: Request) {
   return db
-    .prepare("SELECT name,session_id FROM players WHERE token=?")
-    .get(cookie(request, "player")) as
-    { name: string; session_id: string } | undefined;
+    .select({ name: players.name, session_id: players.session_id })
+    .from(players)
+    .where(eq(players.token, cookie(request, "player")))
+    .get();
 }
 function secret(a: string, b: string) {
   const x = Buffer.from(a),
@@ -53,7 +45,7 @@ function secret(a: string, b: string) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 function session(id: string) {
-  const s = db.prepare("SELECT * FROM sessions WHERE id=?").get(id) as any;
+  const s = db.select().from(sessions).where(eq(sessions.id, id)).get();
   if (!s) throw new Error("Game not found.");
   return s;
 }
@@ -95,17 +87,41 @@ export async function handle(request: Request) {
               },
         ),
         sessions: db
-          .prepare(
-            "SELECT id,name,status,progress,(SELECT count(*) FROM players WHERE session_id=sessions.id) players FROM sessions WHERE ? OR status='open' OR id=? ORDER BY created DESC LIMIT 100",
+          .select({
+            id: sessions.id,
+            name: sessions.name,
+            status: sessions.status,
+            progress: sessions.progress,
+            players:
+              sql<number>`(select count(*) from ${players} where ${players.session_id} = ${sessions.id})`.mapWith(
+                Number,
+              ),
+          })
+          .from(sessions)
+          .where(
+            isAdmin
+              ? undefined
+              : or(
+                  eq(sessions.status, "open"),
+                  eq(sessions.id, p?.session_id || ""),
+                ),
           )
-          .all(isAdmin ? 1 : 0, p?.session_id || ""),
+          .orderBy(desc(sessions.created))
+          .limit(100)
+          .all(),
         player: p ? { ...p, session: session(p.session_id) } : null,
         ...(isAdmin
           ? {
               events: db
-                .prepare("SELECT * FROM events ORDER BY id DESC LIMIT 60")
+                .select()
+                .from(events)
+                .orderBy(desc(events.id))
+                .limit(60)
                 .all(),
-              players: db.prepare("SELECT name,session_id FROM players").all(),
+              players: db
+                .select({ name: players.name, session_id: players.session_id })
+                .from(players)
+                .all(),
             }
           : {}),
       });
@@ -131,7 +147,7 @@ export async function handle(request: Request) {
       if (!secret(String(body.key || ""), process.env.ADMIN_KEY || "demo"))
         throw new Error("Incorrect game master key.");
       const token = randomUUID();
-      db.prepare("INSERT INTO admins VALUES (?)").run(token);
+      db.insert(admins).values({ token }).run();
       return reply(
         { ok: true },
         `gm=${token}; HttpOnly; SameSite=Strict; Path=/`,
@@ -145,10 +161,10 @@ export async function handle(request: Request) {
       if (s.status !== "open")
         throw new Error("This game is not accepting players.");
       const token = randomUUID();
-      db.prepare("INSERT INTO players VALUES (?,?,?)").run(token, name, s.id);
-      db.prepare("DELETE FROM players WHERE token=?").run(
-        cookie(request, "player"),
-      );
+      db.insert(players).values({ token, name, session_id: s.id }).run();
+      db.delete(players)
+        .where(eq(players.token, cookie(request, "player")))
+        .run();
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },
@@ -156,9 +172,9 @@ export async function handle(request: Request) {
       );
     }
     if (action === "leave") {
-      db.prepare("DELETE FROM players WHERE token=?").run(
-        cookie(request, "player"),
-      );
+      db.delete(players)
+        .where(eq(players.token, cookie(request, "player")))
+        .run();
       return reply(
         { ok: true },
         "player=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
@@ -170,9 +186,10 @@ export async function handle(request: Request) {
       if (s.status !== "running")
         throw new Error("Your game master needs to start or resume the game.");
       const progress = nextUnlock(s.progress, String(body.code || ""));
-      db.prepare(
-        "UPDATE sessions SET progress=? WHERE id=? AND progress=?",
-      ).run(progress, s.id, s.progress);
+      db.update(sessions)
+        .set({ progress })
+        .where(and(eq(sessions.id, s.id), eq(sessions.progress, s.progress)))
+        .run();
       event(
         s.id,
         `${p.name} unlocked ${["the study", "the archive", "the observatory"][progress - 1]}`,
@@ -185,7 +202,9 @@ export async function handle(request: Request) {
         { status: 401, headers },
       );
     if (action === "logout") {
-      db.prepare("DELETE FROM admins WHERE token=?").run(cookie(request, "gm"));
+      db.delete(admins)
+        .where(eq(admins.token, cookie(request, "gm")))
+        .run();
       return reply(
         { ok: true },
         "gm=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
@@ -196,7 +215,7 @@ export async function handle(request: Request) {
       if (!name || name.length > 80)
         throw new Error("Enter a session name (1–80 characters).");
       const id = randomUUID();
-      db.prepare("INSERT INTO sessions(id,name) VALUES (?,?)").run(id, name);
+      db.insert(sessions).values({ id, name }).run();
       event(id, "Session created");
       return reply({ ok: true, id });
     }
@@ -204,19 +223,20 @@ export async function handle(request: Request) {
       session(body.id);
       if (!["open", "running", "paused", "closed"].includes(body.status))
         throw new Error("Invalid status");
-      db.prepare("UPDATE sessions SET status=? WHERE id=?").run(
-        body.status,
-        body.id,
-      );
+      db.update(sessions)
+        .set({ status: body.status })
+        .where(eq(sessions.id, body.id))
+        .run();
       event(body.id, `Session ${body.status}`);
       return reply({ ok: true });
     }
     if (action === "advance") {
       const s = session(body.id);
       if (s.progress >= 3) throw new Error("All areas are unlocked.");
-      db.prepare("UPDATE sessions SET progress=progress+1 WHERE id=?").run(
-        s.id,
-      );
+      db.update(sessions)
+        .set({ progress: sql`${sessions.progress} + 1` })
+        .where(eq(sessions.id, s.id))
+        .run();
       event(s.id, "Game master unlocked the next area");
       return reply({ ok: true });
     }

@@ -1,10 +1,10 @@
 # Threshold
 
-A local-first home escape room baseline. TanStack Start + React + TypeScript, Tailwind, shadcn-style Radix UI components, and SQLite through Node's built-in `node:sqlite`. The game master runs the server; players only need their phone browser.
+A local-first home escape room baseline. TanStack Start + React + TypeScript, Tailwind, shadcn-style Radix UI components, and Drizzle ORM over SQLite through Node's built-in `node:sqlite`. The game master runs the server; players only need their phone browser.
 
 ## Run on your MacBook
 
-Use Node **24 LTS** (minimum 22.13), and pnpm.
+Use Node **24 LTS** (Node 22.16+ is also supported), and pnpm. Drizzle's Node SQLite adapter and Drizzle Kit are pinned to `1.0.0-rc.4`; that adapter currently requires the release-candidate version.
 
 ```sh
 pnpm install
@@ -62,6 +62,19 @@ Set up Hue inside Home Assistant. For Alexa, expose a Home Assistant script/auto
 Reference: [Home Assistant REST API](https://developers.home-assistant.io/docs/api/rest/), [TanStack Start](https://tanstack.com/start/latest/docs/framework/react/build-from-scratch).
 
 ## Development
+
+Database schema lives in `src/lib/schema.server.ts`; server queries use Drizzle's typed query builders. SQLite remains the persistent database. TanStack DB is a client-side reactive store and is not needed for this server-side ORM layer.
+
+Migrations in `drizzle/` are applied automatically when the server starts. The initial migration adopts matching databases from the raw-SQL baseline without dropping tables or changing data; incompatible legacy schemas stop startup with an error. Back up `data/` before changing a real game's schema. Keep the `drizzle/` folder alongside the built app and run from the project root.
+
+After editing the schema, generate and review a migration before applying it:
+
+```sh
+pnpm db:generate
+pnpm db:migrate
+```
+
+Both scripts load `.env`; `DATABASE_PATH` optionally changes the SQLite path. `db:migrate` applies migrations without starting the server or seeding a game. Commit generated SQL and snapshots with the schema change. Avoid `drizzle-kit push` against a running game's database.
 
 ```sh
 pnpm test
