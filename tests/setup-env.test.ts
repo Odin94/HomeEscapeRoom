@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { parseEnv } from "node:util";
-import { mergeEnv, runSetup, terminalPrompt } from "../scripts/setup-env-lib";
+import { discoverEntities, mergeEnv, runSetup } from "../scripts/setup-env-lib";
+import { terminalPrompt } from "../scripts/setup-env-ui";
+
+const offline: typeof fetch = async () => {
+  throw new Error("offline");
+};
 
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   const directory = await mkdtemp(join(tmpdir(), "threshold-env-"));
@@ -39,6 +44,7 @@ test("Enter saves, links use chosen HA address, summaries mask credentials", asy
   );
   await runSetup({
     directory,
+    fetcher: offline,
     log: (message) => logs.push(message),
     ask: async (_label, secret) => {
       hidden.push(!!secret);
@@ -135,20 +141,16 @@ test("terminal suppresses typed/pasted secrets and restores normal echo", async 
     },
   });
   const terminal = terminalPrompt(input, screen);
-  try {
-    const secret = terminal.ask("Password: ", true);
-    input.write("pasted-secret");
-    input.write("\x7f!");
-    input.write("\r");
-    assert.equal(await secret, "pasted-secre!");
-    assert.equal(output, "Password: \n");
-    const regular = terminal.ask("URL: ");
-    input.write("ha.lan\r");
-    assert.equal(await regular, "ha.lan");
-    assert.ok(output.includes("ha.lan"));
-  } finally {
-    terminal.close();
-  }
+  const secret = terminal.ask("Password: ", true);
+  input.write("pasted-secret");
+  input.write("\r");
+  assert.equal(await secret, "pasted-secret");
+  assert.ok(!output.includes("pasted-secret"));
+  assert.ok(output.includes("*"));
+  const regular = terminal.ask("URL: ");
+  input.write("ha.lan\r");
+  assert.equal(await regular, "ha.lan");
+  assert.ok(output.includes("ha.lan"));
 });
 
 test("Ctrl+C aborts a hidden prompt without echoing its partial secret", async () => {
@@ -161,13 +163,174 @@ test("Ctrl+C aborts a hidden prompt without echoing its partial secret", async (
     },
   });
   const terminal = terminalPrompt(input, screen);
-  try {
-    const pending = terminal.ask("Token: ", true);
-    const rejected = assert.rejects(pending, { name: "AbortError" });
-    input.write("partial-secret\x03");
-    await rejected;
-    assert.equal(output, "Token: \n");
-  } finally {
-    terminal.close();
+  const pending = terminal.ask("Token: ", true);
+  const rejected = assert.rejects(pending, /Setup cancelled/);
+  input.write("partial-secret\x03");
+  await rejected;
+  assert.ok(!output.includes("partial-secret"));
+});
+
+test("Clack filters entity choices and defaults review to saving", async () => {
+  const input = new PassThrough();
+  let output = "";
+  const screen = new Writable({
+    write(chunk, _encoding, done) {
+      output += chunk;
+      done();
+    },
+  });
+  const terminal = terminalPrompt(input, screen);
+  const selected = terminal.choose(
+    "Atmosphere scene",
+    [
+      { value: "keep", label: "Leave unconfigured" },
+      { value: "scene.twilight", label: "Twilight · scene.twilight" },
+      { value: "manual", label: "Enter manually" },
+    ],
+    "keep",
+    true,
+  );
+  input.write("twilight");
+  input.write("\r");
+  assert.equal(await selected, "scene.twilight");
+  assert.ok(output.includes("Twilight"));
+  const review = terminal.choose(
+    "Save settings?",
+    [
+      { value: "yes", label: "Save" },
+      { value: "discard", label: "Discard" },
+    ],
+    "yes",
+  );
+  input.write("\r");
+  assert.equal(await review, "yes");
+});
+
+test("discovery uses a read-only authenticated request and filters supported entities", async () => {
+  const entities = await discoverEntities(
+    "http://ha.lan:8123/",
+    "token",
+    async (url, options) => {
+      assert.equal(url, "http://ha.lan:8123/api/states");
+      assert.equal(options?.method, undefined);
+      assert.deepEqual(options?.headers, { Authorization: "Bearer token" });
+      assert.equal(options?.redirect, "error");
+      assert.ok(options?.signal);
+      return Response.json([
+        {
+          entity_id: "light.study",
+          attributes: { friendly_name: "Study lamp" },
+          state: "on",
+        },
+        {
+          entity_id: "scene.twilight",
+          attributes: { friendly_name: "Twilight" },
+        },
+        { entity_id: "script.announcement" },
+        { entity_id: "sensor.temperature" },
+        null,
+        { entity_id: "light.invalid id" },
+      ]);
+    },
+  );
+  assert.equal(entities.length, 3);
+  assert.equal(
+    entities.find((entity) => entity.id === "light.study")?.name,
+    "Study lamp",
+  );
+});
+
+test("discovery reports authentication, malformed responses and timeouts without leaking token", async () => {
+  for (const [fetcher, message] of [
+    [
+      async () => new Response("secret-token", { status: 401 }),
+      /rejected the token/,
+    ],
+    [async () => Response.json({}), /entity list/],
+    [async () => new Response("not json"), /valid entity data/],
+    [offline, /8 seconds/],
+  ] as const) {
+    await assert.rejects(
+      discoverEntities("http://ha.lan", "secret-token", fetcher),
+      message,
+    );
   }
+});
+
+test("pickers show matching domains, allow manual entry, trim and explain wrong prefixes", async (t) => {
+  const directory = await workspace(t);
+  const logs: string[] = [];
+  let choices = 0;
+  const next = answers([
+    "pw",
+    "http://ha.lan:8123",
+    "token",
+    " scene.wrong ",
+    " light.manual ",
+  ]);
+  await runSetup({
+    directory,
+    log: (message) => logs.push(message),
+    ask: next,
+    fetcher: async () =>
+      Response.json([
+        {
+          entity_id: "light.study",
+          attributes: { friendly_name: "Study" },
+          state: "on",
+        },
+        { entity_id: "scene.twilight" },
+        { entity_id: "script.say_hello" },
+      ]),
+    choose: async (_message, options, initial, searchable) => {
+      choices++;
+      if (choices <= 3) {
+        assert.equal(searchable, true);
+        assert.equal(initial, "keep");
+        assert.ok(options.some((option) => option.value === "manual"));
+      }
+      if (choices === 1) {
+        assert.ok(options.some((option) => option.value === "light.study"));
+        assert.ok(!options.some((option) => option.value.startsWith("scene.")));
+        return "manual";
+      }
+      if (choices === 2) return "scene.twilight";
+      if (choices === 3) return "keep";
+      assert.equal(initial, "yes");
+      return "yes";
+    },
+  });
+  const env = parseEnv(await readFile(join(directory, ".env"), "utf8"));
+  assert.equal(env.HA_LIGHT_ENTITY, "light.manual");
+  assert.equal(env.HA_SCENE_ENTITY, "scene.twilight");
+  assert.equal(env.HA_VOICE_SCRIPT, "");
+  assert.ok(logs.some((message) => message.includes("needs a light. ID")));
+});
+
+test("failed discovery retries then offers manual binding selection", async (t) => {
+  const directory = await workspace(t);
+  let requests = 0;
+  const decisions = answers([
+    "retry",
+    "manual",
+    "manual",
+    "keep",
+    "keep",
+    "yes",
+  ]);
+  await runSetup({
+    directory,
+    log: () => {},
+    ask: answers(["pw", "http://ha.lan", "token", "light.manual"]),
+    fetcher: async () => {
+      requests++;
+      throw new Error("offline");
+    },
+    choose: decisions,
+  });
+  assert.equal(requests, 2);
+  assert.equal(
+    parseEnv(await readFile(join(directory, ".env"), "utf8")).HA_LIGHT_ENTITY,
+    "light.manual",
+  );
 });
