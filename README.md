@@ -43,7 +43,9 @@ Players scan physical QR codes using their phone's camera app. No browser camera
 
 ## Connect Home Assistant
 
-Run `pnpm run setup:env` for guided setup. It explains each setting, generates a strong game master key by default, validates the URL and entity ID formats, and preserves other `.env` settings. Press Enter to keep an existing value or enter `-` to clear it. Leaving HA_URL empty enables demo mode. Changes are saved only after confirmation; existing secrets are not printed, but newly typed values are visible in your terminal. Find the generated login key in `.env`.
+Run `pnpm run setup:env` for guided setup. It explains each setting, links directly to your Home Assistant instance, generates a game master password by default, validates formats, and preserves other `.env` settings. Press Enter to keep an existing value or enter `-` to clear an optional field. Leaving HA_URL empty enables demo mode. Password and token input is hidden; summaries show `****`. Find the generated login password in `.env`.
+
+At review, Enter saves by default. Type `edit` to revise answers, `n` to keep a draft without changing `.env`, or `discard` to explicitly delete the draft. Completed answers also survive Ctrl+C and resume on the next run. Drafts contain credentials in the local, Git-ignored `.env.setup-draft`; successful saving removes the draft. Both settings and drafts are written atomically.
 
 1. From the computer running Threshold, open your Home Assistant address (usually `http://homeassistant.local:8123`; use its LAN IP if that hostname does not resolve). Both machines must be reachable on the local network.
 2. In Home Assistant, open your profile → Security → Long-lived access tokens → Create token. Name it Threshold and copy the token when shown. Use it as HA_TOKEN; your Home Assistant password is not the token.

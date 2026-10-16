@@ -4,6 +4,9 @@ node_modules/
 dist/
 data/
 .env
+.env.setup-draft
+.env.setup-tmp
+.env.setup-draft.setup-tmp
 *.tsbuildinfo
 .pnpm-store/
 artifacts/
