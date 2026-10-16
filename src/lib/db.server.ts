@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { dirname } from "node:path";
-import { nextUnlock } from "./game";
+import { areas, nextUnlock, unlockCodes } from "./game.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 mkdirSync(dirname(databasePath), { recursive: true });
 const db = new DatabaseSync(databasePath);
@@ -36,6 +36,7 @@ function cookie(request: Request, name: string) {
   );
 }
 function admin(request: Request) {
+  if (process.env.HA_URL && !process.env.ADMIN_KEY) return false;
   return !!db
     .prepare("SELECT token FROM admins WHERE token=?")
     .get(cookie(request, "gm"));
@@ -56,7 +57,10 @@ function session(id: string) {
   if (!s) throw new Error("Game not found.");
   return s;
 }
-const headers = { "content-type": "application/json" };
+const headers = {
+  "content-type": "application/json",
+  "cache-control": "no-store",
+};
 const reply = (data: unknown, setCookie?: string) =>
   new Response(JSON.stringify(data), {
     headers: { ...headers, ...(setCookie ? { "set-cookie": setCookie } : {}) },
@@ -70,11 +74,31 @@ export async function handle(request: Request) {
         admin: isAdmin,
         demo: !process.env.HA_URL,
         adminConfigured: !!process.env.ADMIN_KEY,
+        areas: areas.map((area, index) =>
+          isAdmin
+            ? { ...area, unlockCode: unlockCodes[index] }
+            : {
+                id: area.id,
+                kind: area.kind,
+                name:
+                  p && index < session(p.session_id).progress
+                    ? area.name
+                    : "An unopened door",
+                hint:
+                  p && index === session(p.session_id).progress
+                    ? area.hint
+                    : "",
+                description:
+                  p && index < session(p.session_id).progress
+                    ? area.description
+                    : "",
+              },
+        ),
         sessions: db
           .prepare(
-            "SELECT id,name,status,progress,(SELECT count(*) FROM players WHERE session_id=sessions.id) players FROM sessions ORDER BY created DESC LIMIT 100",
+            "SELECT id,name,status,progress,(SELECT count(*) FROM players WHERE session_id=sessions.id) players FROM sessions WHERE ? OR status='open' OR id=? ORDER BY created DESC LIMIT 100",
           )
-          .all(),
+          .all(isAdmin ? 1 : 0, p?.session_id || ""),
         player: p ? { ...p, session: session(p.session_id) } : null,
         ...(isAdmin
           ? {
@@ -86,12 +110,24 @@ export async function handle(request: Request) {
           : {}),
       });
     if (request.method !== "POST")
-      return new Response("Method not allowed", { status: 405 });
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        status: 405,
+        headers,
+      });
     if (request.headers.get("origin") !== new URL(request.url).origin)
-      return new Response("Invalid origin", { status: 403 });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid origin. Reload the app and try again.",
+        }),
+        { status: 403, headers },
+      );
     const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      throw new Error("Expected a JSON object.");
     const { action } = body;
     if (action === "login") {
+      if (process.env.HA_URL && !process.env.ADMIN_KEY)
+        throw new Error("Set ADMIN_KEY before connecting real devices.");
       if (!secret(String(body.key || ""), process.env.ADMIN_KEY || "demo"))
         throw new Error("Incorrect game master key.");
       const token = randomUUID();
@@ -110,17 +146,24 @@ export async function handle(request: Request) {
         throw new Error("This game is not accepting players.");
       const token = randomUUID();
       db.prepare("INSERT INTO players VALUES (?,?,?)").run(token, name, s.id);
+      db.prepare("DELETE FROM players WHERE token=?").run(
+        cookie(request, "player"),
+      );
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },
         `player=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`,
       );
     }
-    if (action === "leave")
+    if (action === "leave") {
+      db.prepare("DELETE FROM players WHERE token=?").run(
+        cookie(request, "player"),
+      );
       return reply(
         { ok: true },
         "player=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
       );
+    }
     if (action === "unlock") {
       if (!p) throw new Error("Join a game first.");
       const s = session(p.session_id);
@@ -178,6 +221,8 @@ export async function handle(request: Request) {
       return reply({ ok: true });
     }
     if (action === "device") {
+      if (body.device === "lights" && typeof body.on !== "boolean")
+        throw new Error("Choose lights on or off.");
       const devices: Record<
         string,
         { domain: string; service: string; entity: string | undefined }
@@ -198,7 +243,9 @@ export async function handle(request: Request) {
           entity: process.env.HA_VOICE_SCRIPT,
         },
       };
-      const d = devices[body.device];
+      const d = Object.hasOwn(devices, body.device)
+        ? devices[body.device]
+        : undefined;
       if (!d) throw new Error("Unknown control");
       if (process.env.HA_URL) {
         if (!process.env.HA_TOKEN || !d.entity)

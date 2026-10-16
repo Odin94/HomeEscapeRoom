@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextUnlock } from "../src/lib/game";
+import { nextUnlock } from "../src/lib/game.server";
 test("team progresses through QR, password, QR in order", () => {
   assert.equal(nextUnlock(0, "study-marker-7c92"), 1);
   assert.equal(nextUnlock(1, " RAVEN "), 2);

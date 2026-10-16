@@ -63,6 +63,14 @@ test("authenticated game lifecycle persists shared, isolated progression", async
     400,
   );
   await call({ action: "status", id, status: "running" }, gm);
+  assert.ok(
+    !(await (await call()).json()).sessions.some((s: any) => s.id === id),
+  );
+  assert.ok(
+    (await (await call(undefined, player)).json()).sessions.some(
+      (s: any) => s.id === id,
+    ),
+  );
   assert.equal((await call({ action: "join", id, name: "Late" })).status, 400);
   assert.equal(
     (await call({ action: "device", device: "lights", on: true }, player))
@@ -83,6 +91,15 @@ test("authenticated game lifecycle persists shared, isolated progression", async
   assert.equal(state.player.session.progress, 1);
   assert.equal(state.events, undefined);
   assert.equal(state.player.token, undefined);
+  assert.equal(state.areas[0].description.includes("five letters"), true);
+  assert.equal(state.areas[1].description, "");
+  assert.equal(state.areas[2].hint, "");
+  assert.equal(
+    JSON.stringify(state).includes("observatory-marker-a83f"),
+    false,
+  );
+  assert.ok(state.areas.every((area: any) => area.unlockCode === undefined));
+  assert.equal((await call()).headers.get("cache-control"), "no-store");
   await call({ action: "status", id, status: "paused" }, gm);
   assert.equal(
     (await call({ action: "unlock", code: "raven" }, player)).status,
@@ -116,4 +133,51 @@ test("authenticated game lifecycle persists shared, isolated progression", async
   assert.ok(
     state.events.some((e: any) => e.message.includes("Demo: lights on")),
   );
+  assert.equal(state.areas[1].unlockCode, "raven");
+  assert.equal(
+    (await call({ action: "device", device: "lights", on: "false" }, gm))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await call({ action: "device", device: "toString" }, gm)).status,
+    400,
+  );
+  assert.equal((await call({ action: "leave" }, player)).status, 200);
+  assert.equal((await (await call(undefined, player)).json()).player, null);
+  const logout = await call({ action: "logout" }, gm);
+  assert.equal(logout.status, 200);
+  assert.equal(
+    (await call({ action: "create", name: "Revoked" }, gm)).status,
+    401,
+  );
+});
+test("changing games revokes the previous player credential", async () => {
+  const a = await call({
+    action: "join",
+    id: "signal-house",
+    name: "Returning player",
+  });
+  const previous = a.headers.get("set-cookie")!.split(";")[0];
+  const b = await call(
+    { action: "join", id: "signal-house", name: "Returning player" },
+    previous,
+  );
+  assert.equal(b.status, 200);
+  assert.equal((await (await call(undefined, previous)).json()).player, null);
+  const current = b.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await (await call(undefined, current)).json()).player.name,
+    "Returning player",
+  );
+});
+test("real devices cannot be controlled through the default demo key", async () => {
+  process.env.HA_URL = "http://homeassistant.invalid";
+  delete process.env.ADMIN_KEY;
+  try {
+    assert.equal((await call({ action: "login", key: "demo" })).status, 400);
+  } finally {
+    delete process.env.HA_URL;
+    process.env.ADMIN_KEY = "test-key";
+  }
 });

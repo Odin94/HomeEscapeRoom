@@ -1,5 +1,11 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -28,7 +34,15 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 import { Button, Modal } from "./ui";
-import { areas } from "../lib/game";
+type Area = {
+  id: string;
+  name: string;
+  kind: string;
+  hint: string;
+  description: string;
+  subtitle?: string;
+  unlockCode?: string;
+};
 type Session = {
   id: string;
   name: string;
@@ -41,6 +55,7 @@ type State = {
   demo: boolean;
   adminConfigured: boolean;
   sessions: Session[];
+  areas: Area[];
   events?: {
     id: number;
     message: string;
@@ -50,7 +65,7 @@ type State = {
   players?: { name: string; session_id: string }[];
   player: { name: string; session_id: string; session: Session } | null;
 };
-async function api(body?: unknown) {
+async function api(body?: unknown, signal?: AbortSignal) {
   const r = await fetch(
     "/api/game",
     body
@@ -59,7 +74,7 @@ async function api(body?: unknown) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
-      : undefined,
+      : { signal, cache: "no-store" },
   );
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || "Something went wrong");
@@ -68,6 +83,7 @@ async function api(body?: unknown) {
 export function App() {
   const path = useLocation().pathname;
   const [state, setState] = useState<State>();
+  const areas = state?.areas || [];
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,16 +92,27 @@ export function App() {
   const [query, setQuery] = useState("");
   const [qr, setQr] = useState("");
   const [origin, setOrigin] = useState("");
-  const refresh = () =>
-    api()
-      .then(setState)
-      .catch((e) => setError(e.message));
+  const pendingRead = useRef<AbortController | null>(null);
+  const refresh = useCallback(async () => {
+    pendingRead.current?.abort();
+    const controller = new AbortController();
+    pendingRead.current = controller;
+    try {
+      const next = await api(undefined, controller.signal);
+      if (!controller.signal.aborted) setState(next);
+    } catch (e) {
+      if (!controller.signal.aborted) setError((e as Error).message);
+    }
+  }, []);
   useEffect(() => {
     refresh();
     setOrigin(location.origin);
     const timer = setInterval(refresh, 3000);
-    return () => clearInterval(timer);
-  }, []);
+    return () => {
+      clearInterval(timer);
+      pendingRead.current?.abort();
+    };
+  }, [refresh]);
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -271,8 +298,14 @@ export function App() {
               </label>
               {!state.adminConfigured && (
                 <p className="muted">
-                  Demo workspace · use <strong>demo</strong> to explore. Set
-                  ADMIN_KEY before hosting a game.
+                  {state.demo ? (
+                    <>
+                      Demo workspace · use <strong>demo</strong> to explore. Set
+                      ADMIN_KEY before hosting a game.
+                    </>
+                  ) : (
+                    "Set ADMIN_KEY in .env and restart the server before connecting real devices."
+                  )}
                 </p>
               )}
               <Button disabled={busy}>
@@ -551,12 +584,7 @@ export function App() {
                       key={a.id}
                       onContextMenu={(e) => {
                         e.preventDefault();
-                        if (a.kind === "qr")
-                          void showQr(
-                            i === 0
-                              ? "study-marker-7c92"
-                              : "observatory-marker-a83f",
-                          );
+                        if (a.kind === "qr") void showQr(a.unlockCode!);
                       }}
                     >
                       <span className="area-index">CHAPTER 0{i + 1}</span>
@@ -576,20 +604,15 @@ export function App() {
                       {a.kind === "qr" ? (
                         <Button
                           variant="outline"
-                          onClick={() =>
-                            showQr(
-                              i === 0
-                                ? "study-marker-7c92"
-                                : "observatory-marker-a83f",
-                            )
-                          }
+                          onClick={() => showQr(a.unlockCode!)}
                         >
                           <Printer size={16} />
                           View printable QR
                         </Button>
                       ) : (
                         <div className="password-answer">
-                          Demo password <code>RAVEN</code>
+                          Demo password{" "}
+                          <code>{a.unlockCode?.toUpperCase()}</code>
                         </div>
                       )}
                     </section>
@@ -735,6 +758,12 @@ export function App() {
                 : "Go somewhere"
         }
       >
+        {error && (
+          <div className="error" role="alert">
+            {error}
+            <button onClick={() => setError("")}>Dismiss</button>
+          </div>
+        )}
         {modal === "create" && (
           <form onSubmit={(e) => submit(e, "create")}>
             <p>Create an open game for players to join.</p>
@@ -1028,11 +1057,14 @@ function Player({
   act: (body: Record<string, unknown>, message?: string) => Promise<boolean>;
 }) {
   const p = state.player!;
+  const areas = state.areas;
+  const search = useLocation().searchStr;
+  const navigate = useNavigate();
   const progress = p.session.progress;
   const [code, setCode] = useState("");
   useEffect(() => {
-    setCode(new URLSearchParams(location.search).get("code") || "");
-  }, []);
+    setCode(new URLSearchParams(search).get("code") || "");
+  }, [search]);
   return (
     <>
       <div className="eyebrow">{p.session.name}</div>
@@ -1091,7 +1123,7 @@ function Player({
               (ok) => {
                 if (ok) {
                   setCode("");
-                  history.replaceState(null, "", "/play");
+                  void navigate({ to: "/play", replace: true });
                 }
               },
             );

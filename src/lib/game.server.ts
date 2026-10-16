@@ -1,3 +1,4 @@
+// Puzzle answers and unrevealed content must never enter the client bundle.
 export const areas = [
   {
     id: "study",
@@ -27,11 +28,15 @@ export const areas = [
       "The signal is restored. The house is awake. You made it out, together.",
   },
 ] as const;
+export const unlockCodes = [
+  "study-marker-7c92",
+  "raven",
+  "observatory-marker-a83f",
+];
 export function nextUnlock(progress: number, code: string) {
-  const secrets = ["study-marker-7c92", "raven", "observatory-marker-a83f"];
   if (progress >= 3)
     throw new Error("Your team has already completed the game.");
-  if (code.trim().toLowerCase() !== secrets[progress])
+  if (code.trim().toLowerCase() !== unlockCodes[progress])
     throw new Error(
       "That does not unlock this area. Check your clue and try again.",
     );

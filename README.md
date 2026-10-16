@@ -13,7 +13,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open `http://localhost:3000` for the dashboard. Without ADMIN_KEY, the demo login key is `demo`; demo access is deliberately visible on the login screen. All device commands are simulated until HA_URL is configured. SQLite is created automatically at `data/threshold.sqlite`; keep that directory when moving the project. No cloud account is required.
+Open `http://localhost:3000` for the dashboard. Without ADMIN_KEY, the demo login key is `demo`; demo access is deliberately visible on the login screen. Connecting Home Assistant requires ADMIN_KEY; the demo key fallback is disabled when HA_URL is set. All device commands are simulated until HA_URL is configured. SQLite is created automatically at `data/threshold.sqlite`; keep that directory when moving the project. No cloud account is required.
 
 For a built server:
 
@@ -76,4 +76,4 @@ The design uses forest green, warm paper, sage accents, Manrope headings and DM 
 
 ## Scope
 
-The three-chapter content and device bindings are currently configured in code/environment variables. There is no puzzle authoring UI, timed expiry, multi-GM permissions, automatic device cues on unlock, or voice unlock endpoint yet. Sessions, player identities, GM tokens, and activity persist in SQLite. Player cookies last one day; leaving the view clears the browser cookie but retains the player record for the GM's roster. Create a new session for each group. The database and Home Assistant credentials are local files and should be backed up and kept private.
+The three-chapter content and device bindings are currently configured in code/environment variables. There is no puzzle authoring UI, timed expiry, multi-GM permissions, automatic device cues on unlock, or voice unlock endpoint yet. Sessions, player identities, GM tokens, and activity persist in SQLite. Player cookies last one day; leaving revokes the player credential and removes that player from the roster, while activity history remains. Switching games also revokes the previous player credential. Unlock codes are returned only to authenticated game masters; players receive discovered chapter descriptions and their next clue. API responses are not cached. Create a new session for each group. The database and Home Assistant credentials are local files and should be backed up and kept private.
