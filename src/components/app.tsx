@@ -27,6 +27,7 @@ type Session = {
 type State = {
   admin: boolean;
   adminConfigured: boolean;
+  shareOrigin?: string | null;
   demo: boolean;
   sessions: Session[];
   games?: Game[];
@@ -77,9 +78,11 @@ export function App() {
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    if (!state?.admin) return;
+    setJoinQr("");
+    setQr("");
+    if (!state?.admin || !state.shareOrigin) return;
     let cancelled = false;
-    void QRCode.toDataURL(`${location.origin}/`, { width: 160, margin: 4 })
+    void QRCode.toDataURL(`${state.shareOrigin}/`, { width: 160, margin: 4 })
       .then((url) => {
         if (!cancelled) setJoinQr(url);
       })
@@ -92,7 +95,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [state?.admin]);
+  }, [state?.admin, state?.shareOrigin]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 5000);
@@ -142,7 +145,11 @@ export function App() {
               </button>
             ))}
           </nav>
-          <a href="/" target="_blank" rel="noreferrer">
+          <a
+            href={state?.shareOrigin ? `${state.shareOrigin}/` : "/"}
+            target="_blank"
+            rel="noreferrer"
+          >
             Open join page ↗
           </a>
           {state?.admin && (
@@ -248,9 +255,10 @@ export function App() {
                         <div className="join-link">
                           <Button
                             variant="ghost"
+                            disabled={!state.shareOrigin}
                             onClick={() => {
                               void navigator.clipboard
-                                .writeText(`${location.origin}/`)
+                                .writeText(`${state.shareOrigin}/`)
                                 .then(() => {
                                   setFailed(false);
                                   setToast("Join link copied");
@@ -270,6 +278,12 @@ export function App() {
                               height={160}
                               alt="Scan to open the join page"
                             />
+                          )}
+                          {!state.shareOrigin && (
+                            <p>
+                              Connect the server to Wi-Fi or Ethernet to share a
+                              join link.
+                            </p>
                           )}
                         </div>
                       </section>
@@ -391,11 +405,12 @@ export function App() {
                       {a.kind === "qr" && (
                         <Button
                           variant="outline"
+                          disabled={!state.shareOrigin}
                           onClick={async () => {
                             try {
                               setQr(
                                 await QRCode.toDataURL(
-                                  `${location.origin}/?code=${encodeURIComponent(a.unlockCode || "")}`,
+                                  `${state.shareOrigin}/?code=${encodeURIComponent(a.unlockCode || "")}`,
                                   { width: 320 },
                                 ),
                               );

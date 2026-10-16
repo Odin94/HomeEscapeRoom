@@ -25,7 +25,7 @@ The supplied Signal House game uses QR → RAVEN → QR. Under Games, show/print
 
 ## Networking and devices
 
-On a MacBook, run `pnpm dev`; it already listens on all network interfaces (`0.0.0.0`) on port 3000. Connect phones to the same Wi-Fi. Use the Network URL printed by Vite, for example `http://192.168.1.50:3000/`, on phones. Open `http://192.168.1.50:3000/secretadmin` on the Mac too, so **Copy join link** and its QR code use that reachable address. Opening admin through `localhost` creates links that phones cannot use. You can also find the Mac's IP address in System Settings → Wi-Fi → Details → TCP/IP.
+On a MacBook, run `pnpm dev`; it already listens on all network interfaces (`0.0.0.0`) on port 3000. Connect phones to the same Wi-Fi. Use the Network URL printed by Vite, for example `http://192.168.1.50:3000/`, on phones. Join links, the join-page shortcut and room QR markers automatically use a private LAN IPv4 address detected on the server, even when admin is opened through `localhost`. An existing LAN address in the browser is preferred; otherwise Wi-Fi is preferred over other interfaces. Sharing is disabled when no LAN address is available. You can also find the Mac's IP address in System Settings → Wi-Fi → Details → TCP/IP.
 
 If macOS asks, allow Node to accept incoming connections. If necessary, allow it in System Settings → Network → Firewall → Options. Keep the Mac awake and avoid guest networks or Wi-Fi client isolation. No router port forwarding is needed for devices on the same LAN.
 

@@ -10,6 +10,7 @@ import {
 import { openStore } from "./store.server";
 import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
 import { settings, saveSettings } from "./settings.server";
+import { lanOrigin } from "./network.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
 export function closeStore() {
@@ -150,6 +151,7 @@ export async function handle(request: Request) {
         ...(isAdmin
           ? {
               games,
+              shareOrigin: lanOrigin(request.url),
               settings: {
                 haUrl: settings().haUrl,
                 tokenConfigured: !!settings().haToken,
