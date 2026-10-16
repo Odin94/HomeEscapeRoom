@@ -60,6 +60,7 @@ export function App() {
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState("");
   const [qr, setQr] = useState("");
+  const [joinQr, setJoinQr] = useState("");
   const [code, setCode] = useState("");
   const refresh = useCallback(async () => {
     try {
@@ -75,6 +76,23 @@ export function App() {
     setCode(new URLSearchParams(location.search).get("code") || "");
     return () => clearInterval(timer);
   }, [refresh]);
+  useEffect(() => {
+    if (!state?.admin) return;
+    let cancelled = false;
+    void QRCode.toDataURL(`${location.origin}/`, { width: 160, margin: 4 })
+      .then((url) => {
+        if (!cancelled) setJoinQr(url);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true);
+          setToast("Could not generate join QR code");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state?.admin]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 5000);
@@ -227,23 +245,33 @@ export function App() {
                           </Button>
                         </div>
                         <SessionControls id={s.id} act={act} busy={busy} />
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            void navigator.clipboard
-                              .writeText(`${location.origin}/`)
-                              .then(() => {
-                                setFailed(false);
-                                setToast("Join link copied");
-                              })
-                              .catch(() => {
-                                setFailed(true);
-                                setToast("Could not copy link");
-                              });
-                          }}
-                        >
-                          Copy join link
-                        </Button>
+                        <div className="join-link">
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              void navigator.clipboard
+                                .writeText(`${location.origin}/`)
+                                .then(() => {
+                                  setFailed(false);
+                                  setToast("Join link copied");
+                                })
+                                .catch(() => {
+                                  setFailed(true);
+                                  setToast("Could not copy link");
+                                });
+                            }}
+                          >
+                            Copy join link
+                          </Button>
+                          {joinQr && (
+                            <img
+                              src={joinQr}
+                              width={160}
+                              height={160}
+                              alt="Scan to open the join page"
+                            />
+                          )}
+                        </div>
                       </section>
                     ))}
                   </div>

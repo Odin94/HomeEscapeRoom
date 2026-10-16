@@ -262,6 +262,17 @@ textarea {
   display: block;
   max-width: 100%;
 }
+.join-link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+}
+.join-link img {
+  display: block;
+  border-radius: 8px;
+}
 .sr-only {
   position: absolute;
   width: 1px;
