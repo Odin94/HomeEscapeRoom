@@ -4,6 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
+    "setup:env": "tsx scripts/setup-env.ts",
     "dev": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "start": "node --env-file-if-exists=.env .output/server/index.mjs",

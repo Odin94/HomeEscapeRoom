@@ -8,8 +8,7 @@ Use Node **24 LTS** (Node 22.16+ is also supported), and pnpm. Drizzle's Node SQ
 
 ```sh
 pnpm install
-cp .env.example .env
-# Set a strong ADMIN_KEY in .env before inviting players.
+pnpm run setup:env
 pnpm dev
 ```
 
@@ -44,7 +43,14 @@ Players scan physical QR codes using their phone's camera app. No browser camera
 
 ## Connect Home Assistant
 
-Create a long-lived token in your Home Assistant profile and configure `.env`:
+Run `pnpm run setup:env` for guided setup. It explains each setting, generates a strong game master key by default, validates the URL and entity ID formats, and preserves other `.env` settings. Press Enter to keep an existing value or enter `-` to clear it. Leaving HA_URL empty enables demo mode. Changes are saved only after confirmation; existing secrets are not printed, but newly typed values are visible in your terminal. Find the generated login key in `.env`.
+
+1. From the computer running Threshold, open your Home Assistant address (usually `http://homeassistant.local:8123`; use its LAN IP if that hostname does not resolve). Both machines must be reachable on the local network.
+2. In Home Assistant, open your profile → Security → Long-lived access tokens → Create token. Name it Threshold and copy the token when shown. Use it as HA_TOKEN; your Home Assistant password is not the token.
+3. In Developer tools → States, copy the entity IDs for your light, scene, and announcement script. Configure the devices, scene, or script in Home Assistant first. Each binding is optional; only configured controls can run. For several bulbs, use a Home Assistant light group.
+4. Finish the wizard and restart Threshold. Sign in using ADMIN_KEY from `.env`, then test each configured dashboard control. These tests operate real devices.
+
+The resulting `.env` looks like:
 
 ```dotenv
 ADMIN_KEY=your-strong-game-master-key
