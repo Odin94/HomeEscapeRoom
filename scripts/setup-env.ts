@@ -63,10 +63,9 @@ async function main() {
     );
     await ask(
       "ADMIN_KEY",
-      "Choose your game master login key (16+ characters). Enter generates one if none exists. You can find it in .env afterward.",
+      "Choose any non-empty game master login key. Enter generates one if none exists. You can find it in .env afterward.",
       randomBytes(24).toString("hex"),
-      (value) =>
-        value.length >= 16 && value !== "replace-with-a-long-random-key",
+      (value) => !!value,
     );
     const url = await ask(
       "HA_URL",
