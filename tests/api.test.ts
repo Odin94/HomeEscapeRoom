@@ -1,11 +1,14 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const directory = mkdtempSync(join(tmpdir(), "threshold-test-"));
 process.env.DATABASE_PATH = join(directory, "test.sqlite");
 process.env.ADMIN_KEY = "test-key";
+process.env.SETTINGS_PATH = join(directory, "settings.json");
+process.env.GAMES_PATH = join(directory, "games");
+cpSync("games", process.env.GAMES_PATH, { recursive: true });
 delete process.env.HA_URL;
 const { handle, closeStore } = await import("../src/lib/db.server");
 after(() => {
@@ -180,4 +183,96 @@ test("real devices cannot be controlled through the default demo key", async () 
     delete process.env.HA_URL;
     process.env.ADMIN_KEY = "test-key";
   }
+});
+
+test("game snapshots isolate sessions and settings remain private", async () => {
+  const login = await call({ action: "login", key: "test-key" });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const game = {
+    id: "test-room",
+    name: "Different room",
+    areas: [
+      {
+        id: "one",
+        name: "One",
+        kind: "password",
+        hint: "",
+        description: "Original ending",
+        unlockCode: "first-answer",
+        playerView: "narrative",
+      },
+    ],
+    controls: [{ id: "lamp", name: "Lamp", entity: "light.test" }],
+  };
+  assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+  const created = await (
+    await call({ action: "create", gameId: game.id, name: "Snapshot" }, gm)
+  ).json();
+  const joined = await call({ action: "join", id: created.id, name: "Tester" });
+  const player = joined.headers.get("set-cookie")!.split(";")[0];
+  await call({ action: "status", id: created.id, status: "running" }, gm);
+  await call(
+    {
+      action: "save-game",
+      game: { ...game, areas: [{ ...game.areas[0], unlockCode: "changed" }] },
+    },
+    gm,
+  );
+  assert.equal(
+    (await call({ action: "unlock", code: "changed" }, player)).status,
+    400,
+  );
+  assert.equal(
+    (await call({ action: "unlock", code: "first-answer" }, player)).status,
+    200,
+  );
+  const state = await (await call(undefined, player)).json();
+  assert.equal(state.areas.length, 1);
+  assert.equal(state.areas[0].description, "Original ending");
+  assert.equal(state.areas[0].playerView, "narrative");
+  assert.equal(state.games, undefined);
+  assert.equal(state.settings, undefined);
+  assert.equal(
+    (await call({ action: "session-definition", id: created.id }, player))
+      .status,
+    401,
+  );
+  assert.equal(
+    (await call({ action: "save-game", game: { ...game, id: "../bad" } }, gm))
+      .status,
+    400,
+  );
+  assert.equal(
+    (
+      await call(
+        {
+          action: "save-game",
+          game: {
+            ...game,
+            areas: [{ ...game.areas[0], playerView: "arbitrary-code" }],
+          },
+        },
+        gm,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await call(
+        {
+          action: "save-settings",
+          haUrl: "",
+          haToken: "private-token",
+          adminKey: "new-admin-key",
+        },
+        gm,
+      )
+    ).status,
+    200,
+  );
+  const adminState = await (await call(undefined, gm)).json();
+  assert.equal(adminState.settings.tokenConfigured, true);
+  assert.equal(JSON.stringify(adminState).includes("private-token"), false);
+  assert.equal(JSON.stringify(adminState).includes("new-admin-key"), false);
 });

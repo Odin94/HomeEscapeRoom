@@ -1,3 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { App } from "../components/app";
-export const Route = createFileRoute("/areas")({ component: App });
+import { createFileRoute, redirect } from "@tanstack/react-router";
+export const Route = createFileRoute("/areas")({
+  beforeLoad: () => {
+    throw redirect({ to: "/secretadmin" });
+  },
+});

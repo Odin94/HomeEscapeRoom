@@ -1,0 +1,42 @@
+{
+  "id": "signal-house",
+  "name": "The Signal House",
+  "areas": [
+    {
+      "id": "study",
+      "name": "The study",
+      "kind": "qr",
+      "hint": "",
+      "description": "A desk lamp flickers beside a handwritten note: ‘The keeper of the night has five letters.’",
+      "unlockCode": "study-marker-7c92",
+      "playerView": "narrative"
+    },
+    {
+      "id": "archive",
+      "name": "The archive",
+      "kind": "password",
+      "hint": "The keeper of the night. Five letters. A bird.",
+      "description": "Among the old records, a final transmission reads: ‘Find the last marker where the house keeps its light.’",
+      "unlockCode": "raven",
+      "playerView": "narrative"
+    },
+    {
+      "id": "observatory",
+      "name": "The observatory",
+      "kind": "qr",
+      "hint": "",
+      "description": "The signal is restored. The house is awake.",
+      "unlockCode": "observatory-marker-a83f",
+      "playerView": "narrative"
+    }
+  ],
+  "controls": [
+    { "id": "lights", "name": "Study lights", "entity": "light.study" },
+    { "id": "scene", "name": "Room scene", "entity": "scene.escape_room" },
+    {
+      "id": "voice",
+      "name": "Announcement",
+      "entity": "script.escape_room_announcement"
+    }
+  ]
+}

@@ -1,90 +1,35 @@
 # Threshold
 
-A local-first home escape room baseline. TanStack Start + React + TypeScript, Tailwind, shadcn-style Radix UI components, and Drizzle ORM over SQLite through Node's built-in `node:sqlite`. The game master runs the server; players only need their phone browser.
+Home escape rooms with a React/TanStack Start admin and phone experience, backed by SQLite and Home Assistant.
 
-## Run on your MacBook
+## Run
 
-Use Node **24 LTS** (Node 22.16+ is also supported), and pnpm. Drizzle's Node SQLite adapter and Drizzle Kit are pinned to `1.0.0-rc.4`; that adapter currently requires the release-candidate version.
+Use Node 24 and pnpm, from the project root:
 
 ```sh
 pnpm install
-pnpm run setup:env
 pnpm dev
 ```
 
-Open `http://localhost:3000` for the dashboard. Without ADMIN_KEY, the demo login key is `demo`; demo access is deliberately visible on the login screen. Connecting Home Assistant requires ADMIN_KEY; the demo key fallback is disabled when HA_URL is set. All device commands are simulated until HA_URL is configured. SQLite is created automatically at `data/threshold.sqlite`; keep that directory when moving the project. No cloud account is required.
+Open `/` on phones to enter a name and join an open session. Admin lives at `/secretadmin` and still requires a key. Initially use `demo` when no ADMIN_KEY or Home Assistant connection is configured. In **Settings**, save an admin key (at least eight characters), Home Assistant URL and long-lived access token. Clearing the URL enables simulated controls. A blank token or key preserves the existing value. Settings apply immediately and are stored in Git-ignored `data/settings.json`; these override optional `.env` ADMIN_KEY, HA_URL and HA_TOKEN defaults. Keep data files private and backed up. DATABASE_PATH remains a server startup setting, since the running database cannot be moved from the UI.
 
-For a built server:
+## Games and sessions
 
-```sh
-pnpm build
-node --env-file=.env .output/server/index.mjs
-```
+**Games** lets admins create or edit validated JSON definitions. Save writes `games/<id>.json`; commit these files to track room changes. The editor supports any number of areas (up to 30) and named light, scene or script controls (up to 50). Each area has an unlock code, narrative content, QR/password mode and a `playerView` reference. `narrative` is the currently implemented view; unknown references are rejected, and definitions cannot contain executable page code. Schemas live in `src/lib/game.server.ts`. Invalid files fail validation on load and invalid UI edits are rejected before writing.
 
-The `pnpm dev` and `pnpm start` scripts load `.env` explicitly with Node. Run from the project root so the same database is used. Use `HOST=0.0.0.0 PORT=3000 node --env-file=.env .output/server/index.mjs` if you need to override the production listener.
+Entity mappings are game-specific, never read from HA_LIGHT_ENTITY, HA_SCENE_ENTITY or HA_VOICE_SCRIPT. These legacy wizard settings no longer affect play. Configure `controls[].entity` in the game definition instead. The old optional `setup:env` wizard remains available for connection bootstrap; prefer the UI for ongoing configuration.
 
-## Play the progression proof of concept
+Create a session by choosing a game and entering a session name. Each session saves a validated copy of that game's definition in SQLite, including answers and controls. Subsequent game edits affect future sessions only. Existing legacy sessions acquire a snapshot at the first startup after migration. Open joining, then start/resume once everyone has joined. Pause blocks discoveries; End closes the session. Players share progression within a session. Admin controls target that session's game entities.
 
-1. Sign in as game master. The seeded **The Signal House** session is open, or create another in Game sessions.
-2. Open `/play` on each phone. Enter a name and select an open session. All players in a session share progress.
-3. In Game sessions, choose Manage → Start / resume. Joining is only available while a session is open; reopen joining if a player arrives late, then resume.
-4. Open Areas & access and print the study and observatory QR markers. The study marker unlocks the first chapter. The clue's answer is **RAVEN**, unlocking the archive. The observatory marker finishes the adventure.
-5. Watch the dashboard refresh every three seconds. Pause blocks discoveries; manual unlock advances a stuck team. New sessions start at zero and do not affect existing sessions.
+The supplied Signal House game uses QR → RAVEN → QR. Under Games, show/print markers using a network-reachable browser address, e.g. `http://192.168.1.50:3000/secretadmin`. QR links use `/?code=…`; the code survives joining. `/play` redirects to the root and preserves QR queries; old admin URLs redirect to `/secretadmin`.
 
-Players scan physical QR codes using their phone's camera app. No browser camera permission or camera API is needed, so plain HTTP on a trusted LAN works. Codes land at `/play?code=…`; the player confirms the discovery. If they have not joined yet, the code remains in the URL while joining. Scanning a later chapter early fails on the server. Codes are demo content, not cryptographic proof of being physically present.
+## Networking and devices
 
-## LAN and Tailscale
+Host the server on your LAN, allow Node through the firewall, disable sleep and avoid guest Wi-Fi isolation. Tailscale also works if phones can reach the server and the server can reach Home Assistant. Use on a trusted network; `/secretadmin` is an address, not the authentication boundary. Cookies authenticate admin requests and all writes check Origin.
 
-- Find your MacBook's Wi-Fi IP in System Settings → Wi-Fi → Details → TCP/IP, for example `192.168.1.50`.
-- Open `http://192.168.1.50:3000` on the game-master browser **before generating QR codes**. Codes use the current browser origin; localhost codes will not work from a phone.
-- Allow incoming connections for Node in the macOS firewall. Disable sleep during a game, keep the MacBook powered, and avoid guest Wi-Fi client isolation.
-- With Tailscale, each phone needs access to the tailnet and the MacBook hostname/IP. Separately, the MacBook needs a route to Home Assistant, either directly or through a Tailscale subnet router. A phone reaching the app does not automatically make Home Assistant reachable from the MacBook.
-- Treat this as a trusted-network baseline. Do not port-forward it onto the public internet. HTTPS via a trusted reverse proxy is appropriate for broader access. Tokens use HttpOnly, SameSite cookies; use a private browser for a separate player identity on the GM computer.
+Home Assistant controls send server-side REST commands with an eight-second timeout. Light entities support on/off; scenes and scripts support turn_on. Add Hue and announcement integrations in Home Assistant first. Configured does not mean connectivity is verified; use a session control and check the result. Secrets and undiscovered content are withheld from unauthenticated API responses. Game JSON contains puzzle answers and belongs in an appropriately private repository.
 
-## Connect Home Assistant
-
-Run `pnpm run setup:env` for guided setup. It explains each setting, links directly to your Home Assistant instance, generates a game master password by default, validates formats, and preserves other `.env` settings. Press Enter to keep an existing value or enter `-` to clear an optional field. Leaving HA_URL empty enables demo mode. Password and token input is hidden; summaries show `****`. Find the generated login password in `.env`.
-
-The terminal interface uses Clack: arrow keys navigate menus, typing filters entity lists by name or ID, and Enter selects. After you enter the URL and token, setup reads Home Assistant's `/api/states` and offers separate lists of `light.`, `scene.`, and `script.` entities. You can keep a binding, clear it, leave it unconfigured, or enter an ID manually. Manual values are trimmed; each control requires its matching domain (a `scene.` ID goes in Atmosphere scene, not Room light). Setup only reads entities and never operates devices. Connection errors offer retry, edit connection details, or manual entry.
-
-At review, Save is selected by default. Choose Edit answers to revise, Keep draft and exit to leave `.env` unchanged, or Discard draft to explicitly delete the draft. Completed answers also survive Ctrl+C and resume on the next run. Drafts contain credentials in the local, Git-ignored `.env.setup-draft`; successful saving removes the draft. Both settings and drafts are written atomically.
-
-1. From the computer running Threshold, open your Home Assistant address (usually `http://homeassistant.local:8123`; use its LAN IP if that hostname does not resolve). Both machines must be reachable on the local network.
-2. In Home Assistant, open your profile → Security → Long-lived access tokens → Create token. Name it Threshold and copy the token when shown. Use it as HA_TOKEN; your Home Assistant password is not the token.
-3. Choose your light, scene, and announcement script from the discovered lists, or use manual entry with IDs from Developer tools → States. Configure the devices, scene, or script in Home Assistant first. Each binding is optional; only configured controls can run. For several bulbs, use a Home Assistant light group.
-4. Finish the wizard and restart Threshold. Sign in using ADMIN_KEY from `.env`, then test each configured dashboard control. These tests operate real devices.
-
-The resulting `.env` looks like:
-
-```dotenv
-ADMIN_KEY=your-strong-game-master-key
-HA_URL=http://homeassistant.local:8123
-HA_TOKEN=your-long-lived-token
-HA_LIGHT_ENTITY=light.study
-HA_SCENE_ENTITY=scene.escape_room
-HA_VOICE_SCRIPT=script.escape_room_announcement
-```
-
-Restart the app. Room lights call `light.turn_on` / `light.turn_off`; atmosphere calls `scene.turn_on`; the voice button calls `script.turn_on`. The app only sends these fixed service types and configured entity IDs. Tokens and entity configuration stay on the server. The dashboard's configured state means credentials exist, not that connectivity has been verified: click a control to test and inspect any returned error. Commands have an eight-second timeout, and successful requests are logged.
-
-Set up Hue inside Home Assistant. For Alexa, expose a Home Assistant script/automation using your chosen Alexa integration. The exact announcement service depends on the integration installed in your HA instance; configure the announcement there and point HA_VOICE_SCRIPT at that script. This baseline triggers announcements; Alexa-to-app voice unlocks are an extension point, not implemented.
-
-Reference: [Home Assistant REST API](https://developers.home-assistant.io/docs/api/rest/), [TanStack Start](https://tanstack.com/start/latest/docs/framework/react/build-from-scratch).
-
-## Development
-
-Database schema lives in `src/lib/schema.server.ts`; server queries use Drizzle's typed query builders. SQLite remains the persistent database. TanStack DB is a client-side reactive store and is not needed for this server-side ORM layer.
-
-Migrations in `drizzle/` are applied automatically when the server starts. The initial migration adopts matching databases from the raw-SQL baseline without dropping tables or changing data; incompatible legacy schemas stop startup with an error. Back up `data/` before changing a real game's schema. Keep the `drizzle/` folder alongside the built app and run from the project root.
-
-After editing the schema, generate and review a migration before applying it:
-
-```sh
-pnpm db:generate
-pnpm db:migrate
-```
-
-Both scripts load `.env`; `DATABASE_PATH` optionally changes the SQLite path. `db:migrate` applies migrations without starting the server or seeding a game. Commit generated SQL and snapshots with the schema change. Avoid `drizzle-kit push` against a running game's database.
+## Build and checks
 
 ```sh
 pnpm test
@@ -93,10 +38,7 @@ pnpm lint
 pnpm fmt
 pnpm fmt:check
 pnpm build
+pnpm start
 ```
 
-The design uses forest green, warm paper, sage accents, Manrope headings and DM Sans body text (Google Fonts, with local sans-serif fallbacks). Shared button, dialog, form and panel styles live in `src/components/ui.tsx` and `src/styles.css`. Cmd/Ctrl+K navigates pages; session rows and QR area cards have contextual actions. Lists are intentionally bounded (100 sessions / 60 recent events) for this small local baseline.
-
-## Scope
-
-The three-chapter content and device bindings are currently configured in code/environment variables. There is no puzzle authoring UI, timed expiry, multi-GM permissions, automatic device cues on unlock, or voice unlock endpoint yet. Sessions, player identities, GM tokens, and activity persist in SQLite. Player cookies last one day; leaving revokes the player credential and removes that player from the roster, while activity history remains. Switching games also revokes the previous player credential. Unlock codes are returned only to authenticated game masters; players receive discovered chapter descriptions and their next clue. API responses are not cached. Create a new session for each group. The database and Home Assistant credentials are local files and should be backed up and kept private.
+Keep `games/` and `drizzle/` beside the built app, run from the project root and preserve `data/`. Migrations apply automatically on startup. Schema: `src/lib/schema.server.ts`; generate changes with `pnpm db:generate` and commit SQL/snapshots. `pnpm db:migrate` applies without launching the app. Back up data before migration. Legacy schema drift stops migration rather than discarding data.

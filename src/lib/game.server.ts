@@ -1,44 +1,86 @@
-// Puzzle answers and unrevealed content must never enter the client bundle.
-export const areas = [
-  {
-    id: "study",
-    name: "The study",
-    subtitle: "Every secret starts somewhere.",
-    kind: "qr",
-    hint: "Find the QR marker hidden in the study.",
-    description:
-      "A desk lamp flickers beside a handwritten note: “The keeper of the night has five letters.”",
-  },
-  {
-    id: "archive",
-    name: "The archive",
-    subtitle: "Follow the light.",
-    kind: "password",
-    hint: "The keeper of the night. Five letters. A bird.",
-    description:
-      "Among the old records, a final transmission reads: “Find the last marker where the house keeps its light.”",
-  },
-  {
-    id: "observatory",
-    name: "The observatory",
-    subtitle: "Bring the signal home.",
-    kind: "qr",
-    hint: "Find the final QR marker in the observatory.",
-    description:
-      "The signal is restored. The house is awake. You made it out, together.",
-  },
-] as const;
-export const unlockCodes = [
-  "study-marker-7c92",
-  "raven",
-  "observatory-marker-a83f",
-];
-export function nextUnlock(progress: number, code: string) {
-  if (progress >= 3)
+import { z } from "zod";
+import {
+  readdirSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+  renameSync,
+} from "node:fs";
+import { resolve, join } from "node:path";
+export const gameSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .max(80),
+  name: z.string().trim().min(1).max(80),
+  areas: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        kind: z.enum(["qr", "password"]),
+        hint: z.string(),
+        description: z.string(),
+        unlockCode: z.string().trim().min(1),
+        playerView: z.enum(["narrative"]).default("narrative"),
+      }),
+    )
+    .min(1)
+    .max(30)
+    .refine(
+      (a) => new Set(a.map((x) => x.id)).size === a.length,
+      "Area IDs must be unique",
+    ),
+  controls: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        entity: z.string().regex(/^(light|scene|script)\.[a-z0-9_]+$/),
+      }),
+    )
+    .max(50)
+    .refine(
+      (a) => new Set(a.map((x) => x.id)).size === a.length,
+      "Control IDs must be unique",
+    ),
+});
+export type Game = z.infer<typeof gameSchema>;
+const directory = () => resolve(process.env.GAMES_PATH || "games");
+export function loadGames(): Game[] {
+  return readdirSync(directory())
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .map((f) => {
+      const game = gameSchema.parse(
+        JSON.parse(readFileSync(join(directory(), f), "utf8")),
+      );
+      if (f !== `${game.id}.json`)
+        throw new Error(`Game filename must match its ID: ${f}`);
+      return game;
+    });
+}
+export function saveGame(value: unknown) {
+  const game = gameSchema.parse(value);
+  mkdirSync(directory(), { recursive: true });
+  const file = join(directory(), `${game.id}.json`);
+  writeFileSync(`${file}.tmp`, JSON.stringify(game, null, 2) + "\n");
+  renameSync(`${file}.tmp`, file);
+  return game;
+}
+const initial = loadGames()[0];
+export const areas = initial.areas;
+export const unlockCodes = areas.map((a) => a.unlockCode);
+export function nextUnlock(
+  progress: number,
+  code: string,
+  game: Game = initial,
+) {
+  if (progress >= game.areas.length)
     throw new Error("Your team has already completed the game.");
-  if (code.trim().toLowerCase() !== unlockCodes[progress])
-    throw new Error(
-      "That does not unlock this area. Check your clue and try again.",
-    );
+  if (
+    code.trim().toLowerCase() !== game.areas[progress]?.unlockCode.toLowerCase()
+  )
+    throw new Error("That code does not unlock this area.");
   return progress + 1;
 }

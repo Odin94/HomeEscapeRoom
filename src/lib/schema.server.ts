@@ -28,3 +28,10 @@ export const events = sqliteTable("events", {
 export const admins = sqliteTable("admins", {
   token: text("token").primaryKey(),
 });
+
+export const sessionGames = sqliteTable("session_games", {
+  session_id: text("session_id")
+    .primaryKey()
+    .references(() => sessions.id),
+  definition: text("definition").notNull(),
+});

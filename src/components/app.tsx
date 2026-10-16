@@ -1,72 +1,42 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  ArrowRight,
-  Radio,
-  LayoutDashboard,
-  Users,
-  ScanLine,
-  Settings2,
-  House,
-  Plus,
-  Play,
-  Pause,
-  ChevronRight,
-  Lightbulb,
-  Volume2,
-  Sun,
-  Check,
-  Lock,
-  KeyRound,
-  Activity,
-  Copy,
-  Command,
-  PanelLeftClose,
-  LogOut,
-  Printer,
-} from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
-import { Button, Modal } from "./ui";
+import { Button } from "./ui";
+type Game = {
+  id: string;
+  name: string;
+  areas: Area[];
+  controls: { id: string; name: string; entity: string }[];
+};
 type Area = {
   id: string;
   name: string;
   kind: string;
   hint: string;
   description: string;
-  subtitle?: string;
   unlockCode?: string;
+  playerView?: string;
 };
 type Session = {
   id: string;
   name: string;
   status: string;
   progress: number;
-  players: number;
+  players?: number;
 };
 type State = {
   admin: boolean;
-  demo: boolean;
   adminConfigured: boolean;
+  demo: boolean;
   sessions: Session[];
+  games?: Game[];
   areas: Area[];
-  events?: {
-    id: number;
-    message: string;
-    created: string;
-    session_id: string;
-  }[];
-  players?: { name: string; session_id: string }[];
+  settings?: { haUrl: string; tokenConfigured: boolean };
   player: { name: string; session_id: string; session: Session } | null;
+  events?: { id: number; message: string; created: string }[];
 };
-async function api(body?: unknown, signal?: AbortSignal) {
-  const r = await fetch(
+async function api(body?: unknown) {
+  const response = await fetch(
     "/api/game",
     body
       ? {
@@ -74,1103 +44,594 @@ async function api(body?: unknown, signal?: AbortSignal) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
-      : { signal, cache: "no-store" },
+      : { cache: "no-store" },
   );
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error || "Something went wrong");
-  return d;
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  return result;
 }
 export function App() {
-  const path = useLocation().pathname;
+  const adminPage = useLocation().pathname.startsWith("/secretadmin");
   const [state, setState] = useState<State>();
-  const areas = state?.areas || [];
-  const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState("");
+  const [tab, setTab] = useState("Sessions");
   const [selected, setSelected] = useState("");
-  const [query, setQuery] = useState("");
+  const [editor, setEditor] = useState("");
   const [qr, setQr] = useState("");
-  const [origin, setOrigin] = useState("");
-  const pendingRead = useRef<AbortController | null>(null);
+  const [code, setCode] = useState("");
   const refresh = useCallback(async () => {
-    pendingRead.current?.abort();
-    const controller = new AbortController();
-    pendingRead.current = controller;
     try {
-      const next = await api(undefined, controller.signal);
-      if (!controller.signal.aborted) setState(next);
+      setState(await api());
     } catch (e) {
-      if (!controller.signal.aborted) setError((e as Error).message);
+      setFailed(true);
+      setToast((e as Error).message);
     }
   }, []);
   useEffect(() => {
-    refresh();
-    setOrigin(location.origin);
+    void refresh();
     const timer = setInterval(refresh, 3000);
-    return () => {
-      clearInterval(timer);
-      pendingRead.current?.abort();
-    };
+    setCode(new URLSearchParams(location.search).get("code") || "");
+    return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setModal("navigate");
-      }
-    };
-    window.addEventListener("keydown", fn);
-    return () => window.removeEventListener("keydown", fn);
-  }, []);
-  useEffect(() => {
     if (toast) {
-      const t = setTimeout(() => setToast(""), 4000);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setToast(""), 5000);
+      return () => clearTimeout(timer);
     }
   }, [toast]);
-  async function act(body: Record<string, unknown>, message?: string) {
+  async function act(body: Record<string, unknown>, message = "") {
     setBusy(true);
-    setError("");
     try {
       await api(body);
       await refresh();
-      if (message) setToast(message);
+      setFailed(false);
+      setToast(message);
       return true;
     } catch (e) {
-      setError((e as Error).message);
+      setFailed(true);
+      setToast((e as Error).message);
       return false;
     } finally {
       setBusy(false);
     }
   }
-  function submit(
-    e: FormEvent<HTMLFormElement>,
-    action: string,
-    extra: Record<string, unknown> = {},
-  ) {
+  function submit(e: FormEvent<HTMLFormElement>, action: string) {
     e.preventDefault();
-    const values = Object.fromEntries(new FormData(e.currentTarget));
-    void act({ action, ...values, ...extra }).then((ok) => {
-      if (ok) setModal("");
-    });
-  }
-  async function showQr(code: string) {
-    setQr(
-      await QRCode.toDataURL(`${origin}/play?code=${code}`, {
-        width: 320,
-        margin: 2,
-        color: { dark: "#182d29", light: "#ffffff" },
-      }),
+    void act(
+      { action, ...Object.fromEntries(new FormData(e.currentTarget)) },
+      "Saved",
     );
-    setModal("qr");
   }
   const game =
-    state?.sessions.find((x) => x.id === selected) ||
-    state?.sessions.find((x) => x.status === "running") ||
-    state?.sessions[0];
-  const adminPage = path !== "/play";
-  const nav = [
-    { url: "/", name: "Overview", icon: LayoutDashboard },
-    { url: "/sessions", name: "Game sessions", icon: Users },
-    { url: "/areas", name: "Areas & access", icon: ScanLine },
-    { url: "/integrations", name: "Integrations", icon: Settings2 },
-  ];
+    state?.games?.find((g) => g.id === selected) || state?.games?.[0];
   return (
-    <div className={adminPage ? "app" : "player-app"}>
+    <div className={adminPage ? "admin-shell" : "player-shell"}>
       {adminPage && (
-        <aside className="sidebar">
-          <Link to="/" className="brand">
-            <span className="brand-icon">
-              <House size={23} />
-            </span>
-            threshold<span className="brand-dot">.</span>
-          </Link>
-          <div className="workspace">
-            <span className="workspace-icon">S</span>
-            <div>
-              The Signal House<small>Your escape room workspace</small>
-            </div>
-            <ChevronRight size={15} />
-          </div>
-          <div className="nav-label">WORKSPACE</div>
+        <header>
+          <a href="/secretadmin" className="brand">
+            Threshold
+          </a>
           <nav>
-            {nav.map((n) => (
-              <Link
-                key={n.url}
-                to={n.url}
-                className={path === n.url ? "nav-item active" : "nav-item"}
+            {["Sessions", "Games", "Settings"].map((t) => (
+              <button
+                key={t}
+                aria-current={tab === t ? "page" : undefined}
+                onClick={() => setTab(t)}
               >
-                <n.icon size={19} />
-                {n.name}
-                {n.url === "/" && <span className="nav-dot" />}
-              </Link>
+                {t}
+              </button>
             ))}
           </nav>
-          <button className="quick" onClick={() => setModal("navigate")}>
-            <Command size={16} /> Quick navigation <kbd>⌘ K</kbd>
-          </button>
-          <div className="sidebar-bottom">
-            <div className="local">
-              <span className="green-dot" />
-              <div>
-                Local workspace<small>Made for the room you're in.</small>
-              </div>
-            </div>
-            <Link to="/play" className="player-link">
-              Open player experience
-              <ArrowUpRight size={17} />
-            </Link>
-            <div className="profile">
-              <span className="avatar">GM</span>
-              <div>
-                Game master<small>Behind the scenes</small>
-              </div>
-              <PanelLeftClose size={17} />
-            </div>
-          </div>
-        </aside>
-      )}
-      <main>
-        <header className="topbar">
-          {adminPage ? (
-            <>
-              <div className="breadcrumb">
-                Workspace <ChevronRight size={14} />
-                <span>
-                  {nav.find((n) => n.url === path)?.name || "Overview"}
-                </span>
-              </div>
-              <div className="top-status">
-                <span className="green-dot" />
-                Local server <span className="divider" />{" "}
-                <span className="mode-label">GAME MASTER</span>
-                {state?.admin && (
-                  <button
-                    className="icon-button"
-                    aria-label="Sign out as game master"
-                    onClick={() => act({ action: "logout" })}
-                  >
-                    <LogOut size={13} />
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <Link to="/" className="brand">
-                <House size={21} /> threshold.
-              </Link>
-              <span className="mode-label">PLAYER EXPERIENCE</span>
-            </>
+          <a href="/" target="_blank" rel="noreferrer">
+            Open join page ↗
+          </a>
+          {state?.admin && (
+            <Button variant="ghost" onClick={() => act({ action: "logout" })}>
+              Sign out
+            </Button>
           )}
         </header>
-        {error && (
-          <div className="error" role="alert">
-            {error}
-            <button
-              onClick={() => {
-                setError("");
-                refresh();
-              }}
-            >
-              Retry
-            </button>
-            <button onClick={() => setError("")}>Dismiss</button>
-          </div>
-        )}
+      )}
+      <main>
         {!state ? (
-          <div className="loading">Opening the house…</div>
-        ) : adminPage && !state.admin ? (
-          <div className="login panel">
-            <div className="eyebrow">BEHIND THE SCENES</div>
-            <h1>Welcome, game master.</h1>
-            <p>Your room. Your story. Pull the strings from here.</p>
-            <form onSubmit={(e) => submit(e, "login")}>
-              <label>
-                Game master key
-                <input
-                  name="key"
-                  type="password"
-                  required
-                  placeholder="Enter your key"
-                />
-              </label>
-              {!state.adminConfigured && (
-                <p className="muted">
-                  {state.demo ? (
-                    <>
-                      Demo workspace · use <strong>demo</strong> to explore. Set
-                      ADMIN_KEY before hosting a game.
-                    </>
-                  ) : (
-                    "Set ADMIN_KEY in .env and restart the server before connecting real devices."
-                  )}
-                </p>
-              )}
-              <Button disabled={busy}>
-                Enter control room <ArrowRight size={17} />
-              </Button>
-            </form>
-            <Link to="/play" className="text-link">
-              Here to play? Join a game <ArrowUpRight size={15} />
-            </Link>
-          </div>
+          <p>Loading…</p>
         ) : adminPage ? (
-          <div className="content">
-            <div className="page-heading">
-              <div>
-                <div className="eyebrow">THE HOUSE IS YOURS</div>
-                <h1>
-                  {path === "/"
-                    ? "Control room"
-                    : path === "/sessions"
-                      ? "Game sessions"
-                      : path === "/areas"
-                        ? "Areas & access"
-                        : "Connected home"}
-                </h1>
-                <p>
-                  {path === "/"
-                    ? "A little mystery. A few moving parts. Everything in one place."
-                    : path === "/sessions"
-                      ? "Set the stage, gather your players, and let the story unfold."
-                      : path === "/areas"
-                        ? "Turn physical discoveries into the next chapter."
-                        : "One connection to orchestrate the whole house."}
-                </p>
-              </div>
-              <Button onClick={() => setModal("create")}>
-                <Plus size={17} />
-                New session
-              </Button>
-            </div>
-            {path === "/" && (
-              <>
-                <div className="stats">
-                  <Stat
-                    title="ACTIVE SESSIONS"
-                    value={String(
-                      state.sessions.filter((x) => x.status === "running")
-                        .length,
-                    ).padStart(2, "0")}
-                    detail="Let the story unfold"
-                    icon={<Radio size={19} />}
+          !state.admin ? (
+            <section className="login panel">
+              <h1>Admin sign in</h1>
+              <form onSubmit={(e) => submit(e, "login")}>
+                <label>
+                  Admin key
+                  <input
+                    name="key"
+                    type="password"
+                    required
+                    autoComplete="current-password"
                   />
-                  <Stat
-                    title="PLAYERS IN THE HOUSE"
-                    value={String(
-                      state.sessions.reduce((a, x) => a + x.players, 0),
-                    ).padStart(2, "0")}
-                    detail="A shared adventure"
-                    icon={<Users size={19} />}
-                  />
-                  <Stat
-                    title="AREAS DISCOVERED"
-                    value={`${game?.progress || 0}`}
-                    suffix="/ 3"
-                    detail="One clue at a time"
-                    icon={<ScanLine size={19} />}
-                  />
-                  <Stat
-                    title="HOME ASSISTANT"
-                    value={state.demo ? "Demo mode" : "Configured"}
-                    detail={
-                      state.demo
-                        ? "Explore without hardware"
-                        : "Ready to send commands"
-                    }
-                    icon={<House size={19} />}
-                    small
-                  />
-                </div>
-                <div className="dashboard-grid">
-                  <section className="session-hero">
-                    <div className="hero-grain" />
-                    <div className="hero-top">
-                      <span className="light-eyebrow">
-                        <span className="green-dot" />
-                        {game?.status === "running"
-                          ? "LIVE SESSION"
-                          : "READY WHEN YOU ARE"}
-                      </span>
-                      <span className="hero-id">CHAPTER 001</span>
-                    </div>
-                    <div className="hero-copy">
-                      <span className="hero-overline">
-                        AN ESCAPE ROOM AT HOME
-                      </span>
-                      <h2>{game?.name || "The Signal House"}</h2>
-                      <p>
-                        The house has a secret.
-                        <br />
-                        Let curiosity lead the way.
-                      </p>
-                    </div>
-                    <div className="hero-bottom">
-                      <span>
-                        <Users size={16} />
-                        {game?.players || 0} players joined{" "}
-                        <span className="hero-separator">·</span>3 connected
-                        areas
-                      </span>
+                </label>
+                {!state.adminConfigured && (
+                  <p>
+                    {state.demo
+                      ? "Initial key: demo. Set your own key in Settings before connecting devices."
+                      : "Set ADMIN_KEY on the server to enable sign in."}
+                  </p>
+                )}
+                <Button disabled={busy}>Sign in</Button>
+              </form>
+            </section>
+          ) : (
+            <>
+              <h1>{tab}</h1>
+              {tab === "Sessions" && (
+                <>
+                  <section className="panel">
+                    <h2>New session</h2>
+                    <form className="row" onSubmit={(e) => submit(e, "create")}>
+                      <label>
+                        Game
+                        <select name="gameId" required>
+                          {state.games?.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Session name
+                        <input name="name" required maxLength={80} />
+                      </label>
+                      <Button disabled={busy}>Create session</Button>
+                    </form>
+                  </section>
+                  <div className="session-grid">
+                    {state.sessions.map((s) => (
+                      <section className="panel" key={s.id}>
+                        <h2>{s.name}</h2>
+                        <p>
+                          {s.status} · {s.players} joined · {s.progress}{" "}
+                          discoveries
+                        </p>
+                        <div className="actions">
+                          {["open", "running", "paused", "closed"].map(
+                            (status, i) => (
+                              <Button
+                                key={status}
+                                variant={
+                                  s.status === status ? "default" : "outline"
+                                }
+                                disabled={busy}
+                                onClick={() =>
+                                  act({ action: "status", id: s.id, status })
+                                }
+                              >
+                                {
+                                  [
+                                    "Open joining",
+                                    "Start / resume",
+                                    "Pause",
+                                    "End",
+                                  ][i]
+                                }
+                              </Button>
+                            ),
+                          )}
+                          <Button
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => act({ action: "advance", id: s.id })}
+                          >
+                            Unlock next area
+                          </Button>
+                        </div>
+                        <SessionControls id={s.id} act={act} busy={busy} />
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            void navigator.clipboard
+                              .writeText(`${location.origin}/`)
+                              .then(() => {
+                                setFailed(false);
+                                setToast("Join link copied");
+                              })
+                              .catch(() => {
+                                setFailed(true);
+                                setToast("Could not copy link");
+                              });
+                          }}
+                        >
+                          Copy join link
+                        </Button>
+                      </section>
+                    ))}
+                  </div>
+                  <section className="panel">
+                    <h2>Activity</h2>
+                    {state.events?.length ? (
+                      state.events.map((e) => (
+                        <p key={e.id}>
+                          {e.message} <small>{e.created} UTC</small>
+                        </p>
+                      ))
+                    ) : (
+                      <p>No activity yet.</p>
+                    )}
+                  </section>
+                </>
+              )}
+              {tab === "Games" && (
+                <>
+                  <section className="panel">
+                    <div className="row">
+                      <label>
+                        Game
+                        <select
+                          value={game?.id || ""}
+                          onChange={(e) => {
+                            setSelected(e.target.value);
+                            setEditor("");
+                          }}
+                        >
+                          {state.games?.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <Button
+                        onClick={() => setEditor(JSON.stringify(game, null, 2))}
+                      >
+                        Edit definition
+                      </Button>
                       <Button
                         variant="outline"
-                        onClick={() => setModal("session")}
+                        onClick={() =>
+                          setEditor(
+                            JSON.stringify(
+                              {
+                                id: "new-game",
+                                name: "New game",
+                                areas: [
+                                  {
+                                    id: "first",
+                                    name: "First room",
+                                    kind: "password",
+                                    hint: "",
+                                    description: "",
+                                    unlockCode: "change-me",
+                                    playerView: "narrative",
+                                  },
+                                ],
+                                controls: [],
+                              },
+                              null,
+                              2,
+                            ),
+                          )
+                        }
                       >
-                        Manage session <ArrowUpRight size={16} />
+                        New game
                       </Button>
                     </div>
-                    <div className="house-art">
-                      <div className="orbit orbit-one" />
-                      <div className="orbit orbit-two" />
-                      <House strokeWidth={0.65} />
-                      <div className="art-cross">+</div>
-                    </div>
-                  </section>
-                  <section className="panel home-panel">
-                    <SectionTitle
-                      title="The connected house"
-                      detail="A little atmosphere goes a long way."
-                    />
-                    <div className="connection-line">
-                      <span className="ha-logo">
-                        <House size={20} />
-                      </span>
-                      <div>
-                        Home Assistant
-                        <small>
-                          {state.demo ? "Demo connection" : "Server configured"}
-                        </small>
-                      </div>
-                      <span className="tag">
-                        {state.demo ? "SIMULATED" : "CONFIGURED"}
-                      </span>
-                    </div>
-                    <DeviceControls busy={busy} act={act} />
-                    <Link to="/integrations" className="panel-footer">
-                      Manage integrations <ArrowRight size={15} />
-                    </Link>
-                  </section>
-                  <section className="panel progression">
-                    <SectionTitle
-                      title="The path through the house"
-                      detail="A shared journey, unlocked one discovery at a time."
-                      action={
-                        <Link to="/areas">
-                          View all <ArrowUpRight size={15} />
-                        </Link>
-                      }
-                    />
-                    <div className="area-path">
-                      {areas.map((a, i) => (
-                        <div
-                          key={a.id}
-                          className={`area-step ${i < (game?.progress || 0) ? "discovered" : ""}`}
-                        >
-                          <div className="step-number">
-                            {i < (game?.progress || 0) ? (
-                              <Check size={17} />
-                            ) : i === game?.progress ? (
-                              <ScanLine size={17} />
-                            ) : (
-                              <Lock size={15} />
-                            )}
-                          </div>
-                          <span className="area-index">AREA 0{i + 1}</span>
-                          <h3>{a.name}</h3>
-                          <span className="muted area-kind">
-                            {a.kind === "qr" ? (
-                              <ScanLine size={13} />
-                            ) : (
-                              <KeyRound size={13} />
-                            )}{" "}
-                            {a.kind === "qr"
-                              ? "QR discovery"
-                              : "Password unlock"}
-                          </span>
-                          <span className="area-status">
-                            {i < (game?.progress || 0)
-                              ? "Discovered"
-                              : i === game?.progress
-                                ? "Next discovery"
-                                : "Locked"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="panel activity">
-                    <SectionTitle
-                      title="Room activity"
-                      action={
-                        <span className="live-indicator">
-                          <span className="green-dot" />
-                          LIVE
-                        </span>
-                      }
-                    />
-                    <EventList events={state.events || []} />
-                  </section>
-                </div>
-                <div className="bottom-note">
-                  <span>
-                    <Lock size={13} />
-                    Your game stays on your network.
-                  </span>
-                  <span>
-                    Built for a little real-world magic.{" "}
-                    <span className="sparkle">✧</span>
-                  </span>
-                </div>
-              </>
-            )}
-            {path === "/sessions" && (
-              <section className="panel">
-                <SectionTitle
-                  title="Your sessions"
-                  detail="Open sessions accept new players. Start a session to enable discoveries."
-                />
-                {state.sessions.map((s) => (
-                  <div
-                    className="session-row"
-                    key={s.id}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setSelected(s.id);
-                      setModal("session");
-                    }}
-                  >
-                    <span className="session-symbol">
-                      <Radio size={21} />
-                    </span>
-                    <div className="grow">
-                      <h3>{s.name}</h3>
-                      <small>
-                        {s.players} players · {s.progress}/3 areas discovered
-                      </small>
-                    </div>
-                    <span className={`status ${s.status}`}>{s.status}</span>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelected(s.id);
-                        setModal("session");
-                      }}
-                    >
-                      Manage <ArrowRight size={15} />
-                    </Button>
-                  </div>
-                ))}
-              </section>
-            )}
-            {path === "/areas" && (
-              <>
-                <div className="info-note">
-                  <ScanLine size={21} />
-                  <div>
-                    <strong>Let the room do the storytelling.</strong>
                     <p>
-                      Print a marker, hide it in the physical room, and let
-                      players scan it with their phone camera. Progress is
-                      shared by the whole team.
+                      Definitions are saved in games/&lt;id&gt;.json for version
+                      control. Sessions keep a snapshot. Available player view:
+                      narrative.
                     </p>
-                  </div>
-                </div>
-                <div className="area-cards">
-                  {areas.map((a, i) => (
-                    <section
-                      className="panel area-card"
-                      key={a.id}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        if (a.kind === "qr") void showQr(a.unlockCode!);
-                      }}
-                    >
-                      <span className="area-index">CHAPTER 0{i + 1}</span>
-                      <div className="area-illustration">
-                        {a.kind === "qr" ? (
-                          <ScanLine size={60} strokeWidth={1} />
-                        ) : (
-                          <KeyRound size={60} strokeWidth={1} />
-                        )}
-                      </div>
+                    {editor && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          try {
+                            void act(
+                              { action: "save-game", game: JSON.parse(editor) },
+                              "Game saved",
+                            );
+                          } catch {
+                            setFailed(true);
+                            setToast("Enter valid JSON");
+                          }
+                        }}
+                      >
+                        <label>
+                          Game JSON
+                          <textarea
+                            rows={22}
+                            value={editor}
+                            onChange={(e) => setEditor(e.target.value)}
+                            spellCheck={false}
+                            required
+                          />
+                        </label>
+                        <Button disabled={busy}>Save game</Button>
+                      </form>
+                    )}
+                  </section>
+                  {game?.areas.map((a) => (
+                    <section className="panel" key={a.id}>
                       <h2>{a.name}</h2>
-                      <p>{a.subtitle}</p>
-                      <div className="clue">
-                        <small>PLAYER CLUE</small>
-                        {a.hint}
-                      </div>
-                      {a.kind === "qr" ? (
+                      <p>
+                        {a.kind} · {a.playerView}
+                      </p>
+                      <p>{a.description}</p>
+                      <p>
+                        Answer: <code>{a.unlockCode}</code>
+                      </p>
+                      {a.kind === "qr" && (
                         <Button
                           variant="outline"
-                          onClick={() => showQr(a.unlockCode!)}
+                          onClick={async () => {
+                            try {
+                              setQr(
+                                await QRCode.toDataURL(
+                                  `${location.origin}/?code=${encodeURIComponent(a.unlockCode || "")}`,
+                                  { width: 320 },
+                                ),
+                              );
+                            } catch {
+                              setToast("Could not generate QR");
+                              setFailed(true);
+                            }
+                          }}
                         >
-                          <Printer size={16} />
-                          View printable QR
+                          Show QR
                         </Button>
-                      ) : (
-                        <div className="password-answer">
-                          Demo password{" "}
-                          <code>{a.unlockCode?.toUpperCase()}</code>
-                        </div>
                       )}
                     </section>
                   ))}
-                </div>
-                <p className="muted">
-                  QR links use this browser’s address: {origin}. Open this
-                  dashboard using your MacBook’s LAN IP or Tailscale hostname
-                  before printing.
-                </p>
-              </>
-            )}
-            {path === "/integrations" && (
-              <div className="integration-grid">
-                <section className="panel">
-                  <SectionTitle
-                    title="Home Assistant"
-                    detail="Hue lights, scenes, and Alexa routines — through one hub."
-                  />
-                  <div className="integration-banner">
-                    <House size={30} />
-                    <div>
-                      <h3>
-                        {state.demo
-                          ? "Demo mode is on"
-                          : "Home Assistant configured"}
-                      </h3>
-                      <p>
-                        {state.demo
-                          ? "Controls record simulated events. No devices are contacted."
-                          : "Commands are sent server-side. Success appears in the activity log."}
-                      </p>
-                    </div>
-                  </div>
-                  <DeviceControls busy={busy} act={act} />
-                </section>
-                <section className="panel setup">
-                  <SectionTitle title="Connect your house" />
-                  <ol>
-                    <li>
-                      Create a long-lived access token in your Home Assistant
-                      profile.
-                    </li>
-                    <li>Set HA_URL and HA_TOKEN in your server’s .env file.</li>
-                    <li>
-                      Add HA_LIGHT_ENTITY, HA_SCENE_ENTITY, and HA_VOICE_SCRIPT.
-                    </li>
-                    <li>Restart the server, then try a control.</li>
-                  </ol>
-                  <p>
-                    Alexa announcements are triggered through your Home
-                    Assistant script. See README.md for a sample and networking
-                    instructions.
-                  </p>
-                  <div className="clue">
-                    Keep your Home Assistant token on the server. Players never
-                    receive it.
-                  </div>
-                </section>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="player-content">
-            {!state.player ? (
-              <>
-                <div className="eyebrow">A REAL-WORLD MYSTERY</div>
-                <div className="player-emblem">
-                  <House size={65} strokeWidth={1} />
-                </div>
-                <h1>Step into the story.</h1>
-                <p>
-                  Some doors open with a key.
-                  <br />
-                  Others need a little curiosity.
-                </p>
-                <form
-                  className="panel join-form"
-                  onSubmit={(e) => submit(e, "join")}
-                >
-                  <h2>Your adventure starts here.</h2>
-                  <label>
-                    Your name
-                    <input
-                      name="name"
-                      required
-                      maxLength={40}
-                      placeholder="What should we call you?"
-                      autoComplete="given-name"
-                    />
-                  </label>
-                  <label>
-                    Choose an open game
-                    <select name="id" required defaultValue="">
-                      <option value="" disabled>
-                        Select a session
-                      </option>
-                      {state.sessions
-                        .filter((s) => s.status === "open")
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  {!state.sessions.some((s) => s.status === "open") && (
-                    <p className="muted">
-                      No games are open yet. Ask your game master to open one.
-                    </p>
+                  {qr && (
+                    <section className="panel qr">
+                      <img src={qr} alt="Room marker" />
+                      <Button onClick={() => window.print()}>
+                        Print marker
+                      </Button>
+                      <Button variant="ghost" onClick={() => setQr("")}>
+                        Close
+                      </Button>
+                    </section>
                   )}
-                  <Button
-                    disabled={
-                      busy || !state.sessions.some((s) => s.status === "open")
-                    }
+                </>
+              )}
+              {tab === "Settings" && (
+                <section className="panel settings">
+                  <h2>Server connection</h2>
+                  <form
+                    key={state.settings?.haUrl}
+                    onSubmit={(e) => submit(e, "save-settings")}
                   >
-                    Join the adventure <ArrowRight size={17} />
-                  </Button>
-                </form>
-              </>
-            ) : (
-              <Player state={state} busy={busy} act={act} />
+                    <label>
+                      Home Assistant URL
+                      <input
+                        name="haUrl"
+                        type="url"
+                        defaultValue={state.settings?.haUrl}
+                        placeholder="http://homeassistant.local:8123"
+                      />
+                    </label>
+                    <label>
+                      Home Assistant token
+                      <input
+                        name="haToken"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder={
+                          state.settings?.tokenConfigured
+                            ? "Saved — leave blank to keep"
+                            : "Long-lived access token"
+                        }
+                      />
+                    </label>
+                    <label>
+                      Admin key
+                      <input
+                        name="adminKey"
+                        type="password"
+                        minLength={8}
+                        required={!state.adminConfigured}
+                        autoComplete="new-password"
+                        placeholder="Leave blank to keep"
+                      />
+                    </label>
+                    <p>
+                      Clear the URL to use demo mode. Credentials stay on this
+                      server in data/settings.json. Entity mappings belong to
+                      each game.
+                    </p>
+                    <Button disabled={busy}>Save settings</Button>
+                  </form>
+                </section>
+              )}
+            </>
+          )
+        ) : !state.player ? (
+          <section className="join panel">
+            <h1>Join a session</h1>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act({
+                  action: "join",
+                  ...Object.fromEntries(new FormData(e.currentTarget)),
+                });
+              }}
+            >
+              <label>
+                Your name
+                <input
+                  name="name"
+                  required
+                  maxLength={40}
+                  autoComplete="given-name"
+                />
+              </label>
+              <label>
+                Session
+                <select name="id" required defaultValue="">
+                  <option value="" disabled>
+                    Select a session
+                  </option>
+                  {state.sessions
+                    .filter((s) => s.status === "open")
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {!state.sessions.some((s) => s.status === "open") && (
+                <p>No sessions are open.</p>
+              )}
+              <Button
+                disabled={
+                  busy || !state.sessions.some((s) => s.status === "open")
+                }
+              >
+                Join
+              </Button>
+            </form>
+          </section>
+        ) : (
+          <article className="story">
+            <h1>{state.player.session.name}</h1>
+            {state.player.session.status !== "running" && (
+              <p className="session-status">
+                {state.player.session.status === "open"
+                  ? "Waiting to begin"
+                  : state.player.session.status === "paused"
+                    ? "Paused"
+                    : "Session ended"}
+              </p>
             )}
-          </div>
+            {state.areas
+              .filter((_, i) => i < state.player!.session.progress)
+              .map((a) => (
+                <section key={a.id} data-view={a.playerView || "narrative"}>
+                  <h2>{a.name}</h2>
+                  <p>{a.description}</p>
+                </section>
+              ))}
+            {state.player.session.progress < state.areas.length && (
+              <form
+                className="unlock"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act({ action: "unlock", code }).then((ok) => {
+                    if (ok) {
+                      setCode("");
+                      history.replaceState(null, "", "/");
+                    }
+                  });
+                }}
+              >
+                {state.areas[state.player.session.progress]?.hint && (
+                  <p>{state.areas[state.player.session.progress].hint}</p>
+                )}
+                <label>
+                  {state.areas[state.player.session.progress]?.kind ===
+                  "password"
+                    ? "Password"
+                    : "Code"}
+                  <input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                    autoComplete="off"
+                  />
+                </label>
+                <Button
+                  disabled={busy || state.player.session.status !== "running"}
+                >
+                  Unlock
+                </Button>
+              </form>
+            )}
+            <Button variant="ghost" onClick={() => act({ action: "leave" })}>
+              Leave session
+            </Button>
+          </article>
         )}
       </main>
       {toast && (
-        <div className="toast" role="status">
-          <Check size={18} />
+        <div
+          className={`toast ${failed ? "failure" : ""}`}
+          role={failed ? "alert" : "status"}
+        >
           {toast}
+          <button
+            aria-label="Dismiss notification"
+            onClick={() => setToast("")}
+          >
+            ×
+          </button>
         </div>
       )}
-      <Modal
-        open={!!modal}
-        onOpenChange={(v) => !v && setModal("")}
-        title={
-          modal === "create"
-            ? "Set the stage"
-            : modal === "session"
-              ? "Session controls"
-              : modal === "qr"
-                ? "A doorway to the next chapter"
-                : "Go somewhere"
-        }
-      >
-        {error && (
-          <div className="error" role="alert">
-            {error}
-            <button onClick={() => setError("")}>Dismiss</button>
-          </div>
-        )}
-        {modal === "create" && (
-          <form onSubmit={(e) => submit(e, "create")}>
-            <p>Create an open game for players to join.</p>
-            <label>
-              Session name
-              <input
-                name="name"
-                placeholder="Friday night mystery"
-                maxLength={80}
-                required
-                autoFocus
-              />
-            </label>
-            <Button disabled={busy}>
-              <Plus size={17} />
-              Create session
-            </Button>
-          </form>
-        )}
-        {modal === "session" && game && (
-          <>
-            <h3>{game.name}</h3>
-            <p>
-              {game.players} players · {game.progress} of 3 areas discovered
-            </p>
-            <div className="session-actions">
-              {[
-                ["open", "Open joining"],
-                ["running", "Start / resume"],
-                ["paused", "Pause"],
-                ["closed", "End session"],
-              ].map(([status, label]) => (
-                <Button
-                  key={status}
-                  variant={game.status === status ? "default" : "outline"}
-                  disabled={busy}
-                  onClick={() =>
-                    act(
-                      { action: "status", id: game.id, status },
-                      `Session ${status}`,
-                    )
-                  }
-                >
-                  {status === "running" ? (
-                    <Play size={15} />
-                  ) : status === "paused" ? (
-                    <Pause size={15} />
-                  ) : null}
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <Button
-              variant="outline"
-              disabled={busy || game.progress >= 3}
-              onClick={() =>
-                act({ action: "advance", id: game.id }, "Next area unlocked")
-              }
-            >
-              Unlock next area <ArrowRight size={16} />
-            </Button>
-            <p className="muted">
-              Players can join while open. Start the game once everyone is here.
-              Pause freezes player discoveries.
-            </p>
-            <div className="players-list">
-              {state?.players
-                ?.filter((p) => p.session_id === game.id)
-                .map((p, i) => (
-                  <span key={i} className="player-chip">
-                    <Users size={14} />
-                    {p.name}
-                  </span>
-                ))}
-            </div>
-            <Button
-              variant="ghost"
-              onClick={async () => {
-                await navigator.clipboard.writeText(`${origin}/play`);
-                setToast("Player link copied");
-              }}
-            >
-              <Copy size={15} />
-              Copy player link
-            </Button>
-          </>
-        )}
-        {modal === "qr" && (
-          <div className="qr-print">
-            <img src={qr} alt="Scan to discover this area" />
-            <p>Scan with your phone camera to discover the next area.</p>
-            <Button onClick={() => window.print()}>
-              <Printer size={16} />
-              Print marker
-            </Button>
-            <p className="muted">
-              Use a network-reachable address before printing.
-            </p>
-          </div>
-        )}
-        {modal === "navigate" && (
-          <>
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find a page…"
-              aria-label="Find a page"
-            />
-            <div className="command-links">
-              {[
-                ...nav,
-                { url: "/play", name: "Player experience", icon: ScanLine },
-              ]
-                .filter((n) =>
-                  n.name.toLowerCase().includes(query.toLowerCase()),
-                )
-                .map((n) => (
-                  <Link key={n.url} to={n.url} onClick={() => setModal("")}>
-                    <n.icon size={18} />
-                    {n.name}
-                    <ArrowRight size={16} />
-                  </Link>
-                ))}
-            </div>
-          </>
-        )}
-      </Modal>
     </div>
   );
 }
-function Stat({
-  title,
-  value,
-  detail,
-  icon,
-  suffix,
-  small,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: React.ReactNode;
-  suffix?: string;
-  small?: boolean;
-}) {
-  return (
-    <div className="stat">
-      <div className="stat-top">
-        {title}
-        {icon}
-      </div>
-      <div className={small ? "stat-value small" : "stat-value"}>
-        {value}
-        <span>{suffix}</span>
-      </div>
-      <small>{detail}</small>
-    </div>
-  );
-}
-function SectionTitle({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="section-title">
-      <div>
-        <h2>{title}</h2>
-        {detail && <p>{detail}</p>}
-      </div>
-      {action}
-    </div>
-  );
-}
-function DeviceControls({
-  busy,
+function SessionControls({
+  id,
   act,
+  busy,
 }: {
-  busy: boolean;
+  id: string;
   act: (body: Record<string, unknown>, message?: string) => Promise<boolean>;
+  busy: boolean;
 }) {
+  const [controls, setControls] = useState<Game["controls"]>([]);
+  useEffect(() => {
+    void api({ action: "session-definition", id })
+      .then((d) => setControls(d.game.controls))
+      .catch(() => setControls([]));
+  }, [id]);
   return (
-    <div className="device-controls">
-      {[
-        {
-          id: "lights",
-          name: "Room lights",
-          sub: "Hue · via Home Assistant",
-          icon: Lightbulb,
-        },
-        {
-          id: "scene",
-          name: "Set the atmosphere",
-          sub: "Activate your escape room scene",
-          icon: Sun,
-        },
-        {
-          id: "voice",
-          name: "A voice in the room",
-          sub: "Run your Alexa announcement script",
-          icon: Volume2,
-        },
-      ].map((d) => (
-        <div className="device" key={d.id}>
-          <d.icon size={19} />
-          <div className="grow">
-            <strong>{d.name}</strong>
-            <small>{d.sub}</small>
-          </div>
-          {d.id === "lights" ? (
-            <div className="device-buttons">
-              <button
+    <div className="controls">
+      {controls.map((c) => (
+        <div key={c.id}>
+          <span>{c.name}</span>
+          {c.entity.startsWith("light.") ? (
+            <>
+              <Button
+                variant="outline"
                 disabled={busy}
                 onClick={() =>
                   act(
-                    { action: "device", device: d.id, on: true },
-                    "Lights command recorded",
+                    { action: "device", id, device: c.id, on: true },
+                    "Command sent",
                   )
                 }
               >
                 On
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 disabled={busy}
                 onClick={() =>
                   act(
-                    { action: "device", device: d.id, on: false },
-                    "Lights command recorded",
+                    { action: "device", id, device: c.id, on: false },
+                    "Command sent",
                   )
                 }
               >
                 Off
-              </button>
-            </div>
+              </Button>
+            </>
           ) : (
-            <button
-              className="icon-button"
-              aria-label={`Trigger ${d.name}`}
+            <Button
+              variant="outline"
               disabled={busy}
               onClick={() =>
-                act({ action: "device", device: d.id }, "Command recorded")
+                act({ action: "device", id, device: c.id }, "Command sent")
               }
             >
-              <Play size={16} />
-            </button>
+              Run
+            </Button>
           )}
         </div>
       ))}
     </div>
-  );
-}
-function EventList({
-  events,
-}: {
-  events: { id: number; message: string; created: string }[];
-}) {
-  return (
-    <div className="event-list">
-      {events.length ? (
-        events.map((e) => (
-          <div className="event" key={e.id}>
-            <span className="event-dot" />
-            <div>
-              {e.message}
-              <small>{e.created.replace(" ", " · ")} UTC</small>
-            </div>
-          </div>
-        ))
-      ) : (
-        <div className="empty-activity">
-          <Activity size={25} />
-          <p>The house is quiet. For now.</p>
-          <small>Player discoveries and controls appear here.</small>
-        </div>
-      )}
-    </div>
-  );
-}
-function Player({
-  state,
-  busy,
-  act,
-}: {
-  state: State;
-  busy: boolean;
-  act: (body: Record<string, unknown>, message?: string) => Promise<boolean>;
-}) {
-  const p = state.player!;
-  const areas = state.areas;
-  const search = useLocation().searchStr;
-  const navigate = useNavigate();
-  const progress = p.session.progress;
-  const [code, setCode] = useState("");
-  useEffect(() => {
-    setCode(new URLSearchParams(search).get("code") || "");
-  }, [search]);
-  return (
-    <>
-      <div className="eyebrow">{p.session.name}</div>
-      <h1>Welcome, {p.name}.</h1>
-      <p>
-        {progress >= 3
-          ? "Every mystery has an ending. This one is yours."
-          : "Stay curious. The house is full of clues."}
-      </p>
-      <div className="player-progress">
-        <span>{progress}/3 areas discovered</span>
-        <div>
-          <i style={{ width: `${(progress / 3) * 100}%` }} />
-        </div>
-      </div>
-      {p.session.status !== "running" && (
-        <div className="info-note">
-          {p.session.status === "paused"
-            ? "The game is paused. Take a breath."
-            : p.session.status === "closed"
-              ? "This session has ended. Thank you for playing."
-              : "Your game master will start the adventure shortly."}
-        </div>
-      )}
-      {areas.map((a, i) => (
-        <section
-          className={`panel player-area ${i >= progress ? "locked-area" : ""}`}
-          key={a.id}
-        >
-          <span className="area-index">
-            AREA 0{i + 1} {i < progress ? "· DISCOVERED" : ""}
-          </span>
-          <h2>
-            {i < progress
-              ? a.name
-              : i === progress
-                ? "Your next discovery"
-                : "An unopened door"}
-            {i >= progress && <Lock size={18} />}
-          </h2>
-          <p>
-            {i < progress
-              ? a.description
-              : i === progress
-                ? a.hint
-                : "Keep following the story to reveal this area."}
-          </p>
-        </section>
-      ))}
-      {progress < 3 && (
-        <form
-          className="panel unlock-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act({ action: "unlock", code }, "A new chapter is open").then(
-              (ok) => {
-                if (ok) {
-                  setCode("");
-                  void navigate({ to: "/play", replace: true });
-                }
-              },
-            );
-          }}
-        >
-          <h2>
-            {areas[progress].kind === "password"
-              ? "A word opens the way."
-              : "Found a marker?"}
-          </h2>
-          <p>
-            {areas[progress].kind === "qr"
-              ? "Scan the physical QR with your phone camera. Its discovery code will appear here."
-              : "Enter the answer hidden in your clue."}
-          </p>
-          <label>
-            {areas[progress].kind === "password"
-              ? "Password"
-              : "Discovery code"}
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              autoComplete="off"
-              placeholder={
-                areas[progress].kind === "password"
-                  ? "Your answer…"
-                  : "Scan a marker or enter its code"
-              }
-            />
-          </label>
-          <Button disabled={busy || p.session.status !== "running"}>
-            Unlock the next chapter <ArrowRight size={17} />
-          </Button>
-        </form>
-      )}
-      {progress >= 3 && (
-        <div className="completion">
-          <Check size={30} />
-          <h2>You restored the signal.</h2>
-          <p>Three discoveries. One team. A house full of stories.</p>
-        </div>
-      )}
-      <Button variant="ghost" onClick={() => act({ action: "leave" })}>
-        <LogOut size={16} />
-        Leave player view
-      </Button>
-    </>
   );
 }

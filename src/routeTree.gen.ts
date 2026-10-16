@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AreasRouteImport } from './routes/areas'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as PlayRouteImport } from './routes/play'
+import { Route as SecretadminRouteImport } from './routes/secretadmin'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as ApiGameRouteImport } from './routes/api.game'
 
@@ -36,6 +37,11 @@ const PlayRoute = PlayRouteImport.update({
   path: '/play',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecretadminRoute = SecretadminRouteImport.update({
+  id: '/secretadmin',
+  path: '/secretadmin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
+  '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
   '/api/game': typeof ApiGameRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
+  '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
   '/api/game': typeof ApiGameRoute
 }
@@ -69,21 +77,36 @@ export interface FileRoutesById {
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
+  '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
   '/api/game': typeof ApiGameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/areas' | '/integrations' | '/play' | '/sessions' | '/api/game'
+    | '/'
+    | '/areas'
+    | '/integrations'
+    | '/play'
+    | '/secretadmin'
+    | '/sessions'
+    | '/api/game'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/areas' | '/integrations' | '/play' | '/sessions' | '/api/game'
+  to:
+    | '/'
+    | '/areas'
+    | '/integrations'
+    | '/play'
+    | '/secretadmin'
+    | '/sessions'
+    | '/api/game'
   id:
     | '__root__'
     | '/'
     | '/areas'
     | '/integrations'
     | '/play'
+    | '/secretadmin'
     | '/sessions'
     | '/api/game'
   fileRoutesById: FileRoutesById
@@ -93,6 +116,7 @@ export interface RootRouteChildren {
   AreasRoute: typeof AreasRoute
   IntegrationsRoute: typeof IntegrationsRoute
   PlayRoute: typeof PlayRoute
+  SecretadminRoute: typeof SecretadminRoute
   SessionsRoute: typeof SessionsRoute
   ApiGameRoute: typeof ApiGameRoute
 }
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/secretadmin': {
+      id: '/secretadmin'
+      path: '/secretadmin'
+      fullPath: '/secretadmin'
+      preLoaderRoute: typeof SecretadminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sessions': {
       id: '/sessions'
       path: '/sessions'
@@ -149,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AreasRoute: AreasRoute,
   IntegrationsRoute: IntegrationsRoute,
   PlayRoute: PlayRoute,
+  SecretadminRoute: SecretadminRoute,
   SessionsRoute: SessionsRoute,
   ApiGameRoute: ApiGameRoute,
 }

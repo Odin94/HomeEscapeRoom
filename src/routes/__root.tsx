@@ -13,7 +13,7 @@ export const Route = createRootRoute({
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
-      { title: "Threshold · Escape room control" },
+      { title: "Threshold" },
     ],
     links: [{ rel: "stylesheet", href: stylesheet }],
   }),

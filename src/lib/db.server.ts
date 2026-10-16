@@ -1,8 +1,15 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, or, sql } from "drizzle-orm";
-import { admins, events, players, sessions } from "./schema.server";
+import {
+  admins,
+  events,
+  players,
+  sessions,
+  sessionGames,
+} from "./schema.server";
 import { openStore } from "./store.server";
-import { areas, nextUnlock, unlockCodes } from "./game.server";
+import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
+import { settings, saveSettings } from "./settings.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
 export function closeStore() {
@@ -12,6 +19,32 @@ if (!db.select({ id: sessions.id }).from(sessions).limit(1).get())
   db.insert(sessions)
     .values({ id: "signal-house", name: "The Signal House" })
     .run();
+// Freeze legacy sessions once when adopting the game model.
+for (const existing of db.select().from(sessions).all()) {
+  if (
+    !db
+      .select()
+      .from(sessionGames)
+      .where(eq(sessionGames.session_id, existing.id))
+      .get()
+  ) {
+    db.insert(sessionGames)
+      .values({
+        session_id: existing.id,
+        definition: JSON.stringify(loadGames()[0]),
+      })
+      .run();
+  }
+}
+function definition(id: string) {
+  const saved = db
+    .select()
+    .from(sessionGames)
+    .where(eq(sessionGames.session_id, id))
+    .get();
+  if (!saved) throw new Error("Session game definition not found.");
+  return gameSchema.parse(JSON.parse(saved.definition));
+}
 function event(id: string | null, message: string) {
   db.insert(events).values({ session_id: id, message }).run();
 }
@@ -25,7 +58,7 @@ function cookie(request: Request, name: string) {
   );
 }
 function admin(request: Request) {
-  if (process.env.HA_URL && !process.env.ADMIN_KEY) return false;
+  if (settings().haUrl && !settings().adminKey) return false;
   return !!db
     .select()
     .from(admins)
@@ -61,17 +94,21 @@ export async function handle(request: Request) {
   try {
     const isAdmin = admin(request),
       p = player(request);
-    if (request.method === "GET")
+    if (request.method === "GET") {
+      const games = loadGames();
+      const active = p ? definition(p.session_id) : games[0];
+      const areas = active?.areas || [];
       return reply({
         admin: isAdmin,
-        demo: !process.env.HA_URL,
-        adminConfigured: !!process.env.ADMIN_KEY,
+        demo: !settings().haUrl,
+        adminConfigured: !!settings().adminKey,
         areas: areas.map((area, index) =>
           isAdmin
-            ? { ...area, unlockCode: unlockCodes[index] }
+            ? { ...area, unlockCode: area.unlockCode }
             : {
                 id: area.id,
                 kind: area.kind,
+                playerView: area.playerView,
                 name:
                   p && index < session(p.session_id).progress
                     ? area.name
@@ -112,6 +149,11 @@ export async function handle(request: Request) {
         player: p ? { ...p, session: session(p.session_id) } : null,
         ...(isAdmin
           ? {
+              games,
+              settings: {
+                haUrl: settings().haUrl,
+                tokenConfigured: !!settings().haToken,
+              },
               events: db
                 .select()
                 .from(events)
@@ -125,6 +167,7 @@ export async function handle(request: Request) {
             }
           : {}),
       });
+    }
     if (request.method !== "POST")
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
@@ -142,9 +185,9 @@ export async function handle(request: Request) {
       throw new Error("Expected a JSON object.");
     const { action } = body;
     if (action === "login") {
-      if (process.env.HA_URL && !process.env.ADMIN_KEY)
+      if (settings().haUrl && !settings().adminKey)
         throw new Error("Set ADMIN_KEY before connecting real devices.");
-      if (!secret(String(body.key || ""), process.env.ADMIN_KEY || "demo"))
+      if (!secret(String(body.key || ""), settings().adminKey || "demo"))
         throw new Error("Incorrect game master key.");
       const token = randomUUID();
       db.insert(admins).values({ token }).run();
@@ -185,14 +228,18 @@ export async function handle(request: Request) {
       const s = session(p.session_id);
       if (s.status !== "running")
         throw new Error("Your game master needs to start or resume the game.");
-      const progress = nextUnlock(s.progress, String(body.code || ""));
+      const progress = nextUnlock(
+        s.progress,
+        String(body.code || ""),
+        definition(s.id),
+      );
       db.update(sessions)
         .set({ progress })
         .where(and(eq(sessions.id, s.id), eq(sessions.progress, s.progress)))
         .run();
       event(
         s.id,
-        `${p.name} unlocked ${["the study", "the archive", "the observatory"][progress - 1]}`,
+        `${p.name} unlocked ${definition(s.id).areas[progress - 1].name}`,
       );
       return reply({ ok: true });
     }
@@ -210,12 +257,34 @@ export async function handle(request: Request) {
         "gm=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
       );
     }
+    if (action === "session-definition")
+      return reply({ game: definition(String(body.id)) });
+    if (action === "save-settings") {
+      saveSettings(body);
+      db.delete(admins)
+        .where(sql`${admins.token} != ${cookie(request, "gm")}`)
+        .run();
+      return reply({ ok: true });
+    }
+    if (action === "save-game") {
+      saveGame(body.game);
+      return reply({ ok: true });
+    }
     if (action === "create") {
       const name = String(body.name || "").trim();
       if (!name || name.length > 80)
         throw new Error("Enter a session name (1–80 characters).");
       const id = randomUUID();
-      db.insert(sessions).values({ id, name }).run();
+      const game = loadGames().find(
+        (g) => g.id === (body.gameId || "signal-house"),
+      );
+      if (!game) throw new Error("Choose an existing game.");
+      db.transaction((tx) => {
+        tx.insert(sessions).values({ id, name }).run();
+        tx.insert(sessionGames)
+          .values({ session_id: id, definition: JSON.stringify(game) })
+          .run();
+      });
       event(id, "Session created");
       return reply({ ok: true, id });
     }
@@ -232,7 +301,8 @@ export async function handle(request: Request) {
     }
     if (action === "advance") {
       const s = session(body.id);
-      if (s.progress >= 3) throw new Error("All areas are unlocked.");
+      if (s.progress >= definition(s.id).areas.length)
+        throw new Error("All areas are unlocked.");
       db.update(sessions)
         .set({ progress: sql`${sessions.progress} + 1` })
         .where(eq(sessions.id, s.id))
@@ -243,41 +313,28 @@ export async function handle(request: Request) {
     if (action === "device") {
       if (body.device === "lights" && typeof body.on !== "boolean")
         throw new Error("Choose lights on or off.");
-      const devices: Record<
-        string,
-        { domain: string; service: string; entity: string | undefined }
-      > = {
-        lights: {
-          domain: "light",
-          service: body.on ? "turn_on" : "turn_off",
-          entity: process.env.HA_LIGHT_ENTITY,
-        },
-        scene: {
-          domain: "scene",
-          service: "turn_on",
-          entity: process.env.HA_SCENE_ENTITY,
-        },
-        voice: {
-          domain: "script",
-          service: "turn_on",
-          entity: process.env.HA_VOICE_SCRIPT,
-        },
+      const game = definition(String(body.id || "signal-house"));
+      const control = game.controls.find((c) => c.id === body.device);
+      if (!control) throw new Error("Unknown control");
+      const domain = control.entity.split(".")[0];
+      if (domain === "light" && typeof body.on !== "boolean")
+        throw new Error("Choose lights on or off.");
+      const d = {
+        domain,
+        service: domain === "light" && !body.on ? "turn_off" : "turn_on",
+        entity: control.entity,
       };
-      const d = Object.hasOwn(devices, body.device)
-        ? devices[body.device]
-        : undefined;
-      if (!d) throw new Error("Unknown control");
-      if (process.env.HA_URL) {
-        if (!process.env.HA_TOKEN || !d.entity)
+      if (settings().haUrl) {
+        if (!settings().haToken || !d.entity)
           throw new Error(
-            "Configure the Home Assistant token and entity in .env.",
+            "Configure the Home Assistant connection in admin settings.",
           );
         const response = await fetch(
-          `${process.env.HA_URL.replace(/\/$/, "")}/api/services/${d.domain}/${d.service}`,
+          `${settings().haUrl.replace(/\/$/, "")}/api/services/${d.domain}/${d.service}`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${process.env.HA_TOKEN}`,
+              Authorization: `Bearer ${settings().haToken}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ entity_id: d.entity }),
@@ -291,9 +348,9 @@ export async function handle(request: Request) {
       }
       event(
         null,
-        `${process.env.HA_URL ? "Sent" : "Demo"}: ${body.device} ${body.device === "lights" ? (body.on ? "on" : "off") : "triggered"}`,
+        `${settings().haUrl ? "Sent" : "Demo"}: ${body.device} ${body.device === "lights" ? (body.on ? "on" : "off") : "triggered"}`,
       );
-      return reply({ ok: true, demo: !process.env.HA_URL });
+      return reply({ ok: true, demo: !settings().haUrl });
     }
     throw new Error("Unknown action");
   } catch (error) {
