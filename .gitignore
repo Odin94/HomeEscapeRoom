@@ -1,0 +1,9 @@
+node_modules/
+.output/
+.tanstack/
+dist/
+data/
+.env
+*.tsbuildinfo
+.pnpm-store/
+artifacts/
