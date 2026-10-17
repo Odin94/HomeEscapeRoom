@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
 import { GameEditor, ChallengeInput } from "./game-editor";
+import { readGameDraft } from "../lib/game-draft";
 import { MarkerPrint } from "./marker-print";
 import { useStore } from "zustand";
 import { createGameStore, type Game, type State } from "../lib/game-store";
@@ -53,6 +54,11 @@ export function App() {
     }
   }, [setState]);
   useEffect(() => {
+    const draft = readGameDraft();
+    if (draft) {
+      setCreatingGame(true);
+      setEditor(JSON.stringify(draft.game));
+    }
     // Clean up the previous client cache; gameplay no longer uses localStorage.
     try {
       localStorage.removeItem("threshold-player");
@@ -416,12 +422,14 @@ export function App() {
                         initial={JSON.parse(editor)}
                         isNew={creatingGame}
                         busy={busy}
-                        save={(draft) =>
-                          act(
+                        save={async (draft) => {
+                          const success = await act(
                             { action: "save-game", game: draft },
                             "Game saved",
-                          )
-                        }
+                          );
+                          if (success && creatingGame) setEditor("");
+                          return success;
+                        }}
                       />
                     )}
                   </section>

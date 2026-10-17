@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
 const kinds = {
@@ -20,8 +21,18 @@ export function GameEditor({
   busy: boolean;
   save: (game: Game) => Promise<boolean>;
 }) {
-  const [game, setGame] = useState(initial);
-  const [autoId, setAutoId] = useState(isNew);
+  const [draft] = useState(() => (isNew ? readGameDraft() : null));
+  const [game, setGame] = useState(draft?.game ?? initial);
+  const [autoId, setAutoId] = useState(draft?.autoId ?? isNew);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!isNew || saved) return;
+    try {
+      localStorage.setItem(gameDraftKey, JSON.stringify({ game, autoId }));
+    } catch {
+      // Editing still works when browser storage is unavailable or full.
+    }
+  }, [game, autoId, isNew, saved]);
   const patch = (index: number, value: Partial<Area>) =>
     setGame({
       ...game,
@@ -38,7 +49,15 @@ export function GameEditor({
       }}
       onSubmit={(e) => {
         e.preventDefault();
-        void save(game);
+        void save(game).then((success) => {
+          if (!success || !isNew) return;
+          setSaved(true);
+          try {
+            localStorage.removeItem(gameDraftKey);
+          } catch {
+            // A successful server save does not depend on browser storage.
+          }
+        });
       }}
     >
       <label>

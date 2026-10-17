@@ -6,6 +6,55 @@ import { ChallengeInput, GameEditor } from "../src/components/game-editor";
 import { loadGames } from "../src/lib/game.server";
 import QRCode from "qrcode";
 import decode from "jsqr";
+import { gameDraftKey, readGameDraft } from "../src/lib/game-draft";
+
+test("creation restores unfinished drafts and custom IDs, and ignores broken storage", () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const game = structuredClone(loadGames()[0]);
+  game.id = "custom-id";
+  game.name = "Unfinished draft";
+  game.areas[0].kind = "text";
+  game.areas[0].unlockCode = "";
+  game.areas[0].hint = "Keep this clue";
+  let raw = JSON.stringify({ game, autoId: false });
+  try {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem(key: string) {
+          assert.equal(key, gameDraftKey);
+          return raw;
+        },
+      },
+    });
+    assert.deepEqual(readGameDraft(), { game, autoId: false });
+    const html = renderToStaticMarkup(
+      createElement(GameEditor, {
+        initial: loadGames()[0],
+        isNew: true,
+        busy: false,
+        save: async () => true,
+      }),
+    );
+    assert.ok(html.includes('value="custom-id"'));
+    assert.ok(html.includes('value="Unfinished draft"'));
+    assert.ok(html.includes("Keep this clue"));
+    for (const invalid of ["{", "null", '{"game":{},"autoId":true}']) {
+      raw = invalid;
+      assert.equal(readGameDraft(), null);
+    }
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("Storage blocked");
+      },
+    });
+    assert.equal(readGameDraft(), null);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
 
 test("creator offers every configured type and retains device authoring", () => {
   const html = renderToStaticMarkup(
