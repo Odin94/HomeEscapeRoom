@@ -1,5 +1,11 @@
 import { GameMarkdown } from "./game-markdown";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
@@ -249,96 +255,116 @@ export function App() {
                       <Button disabled={busy}>Create session</Button>
                     </form>
                   </section>
-                  <div className="session-grid">
-                    {state.sessions.map((s) => (
-                      <section className="panel" key={s.id}>
-                        <h2>{s.name}</h2>
-                        <p>
-                          {s.status} · {s.players} joined · {s.progress}{" "}
-                          discoveries
-                        </p>
-                        <div className="actions">
-                          {["open", "running", "paused", "closed"].map(
-                            (status, i) => (
+                  {[false, true].map((ended) => (
+                    <SessionSection
+                      key={String(ended)}
+                      ended={ended}
+                      count={
+                        state.sessions.filter(
+                          (s) => (s.status === "closed") === ended,
+                        ).length
+                      }
+                    >
+                      {state.sessions
+                        .filter((s) => (s.status === "closed") === ended)
+                        .map((s) => (
+                          <section className="panel" key={s.id}>
+                            <h2>{s.name}</h2>
+                            <p>
+                              {s.status} · {s.players} joined · {s.progress}{" "}
+                              discoveries
+                            </p>
+                            <div className="actions">
+                              {["open", "running", "paused", "closed"].map(
+                                (status, i) => (
+                                  <Button
+                                    key={status}
+                                    variant={
+                                      s.status === status
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    disabled={busy}
+                                    onClick={() =>
+                                      act({
+                                        action: "status",
+                                        id: s.id,
+                                        status,
+                                      })
+                                    }
+                                  >
+                                    {
+                                      [
+                                        "Open joining",
+                                        "Start / resume",
+                                        "Pause",
+                                        "End",
+                                      ][i]
+                                    }
+                                  </Button>
+                                ),
+                              )}
                               <Button
-                                key={status}
-                                variant={
-                                  s.status === status ? "default" : "outline"
-                                }
+                                variant="outline"
                                 disabled={busy}
                                 onClick={() =>
-                                  act({ action: "status", id: s.id, status })
+                                  act({ action: "advance", id: s.id })
                                 }
                               >
-                                {
-                                  [
-                                    "Open joining",
-                                    "Start / resume",
-                                    "Pause",
-                                    "End",
-                                  ][i]
-                                }
+                                Unlock next area
                               </Button>
-                            ),
-                          )}
-                          <Button
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => act({ action: "advance", id: s.id })}
-                          >
-                            Unlock next area
-                          </Button>
-                        </div>
-                        <SessionControls id={s.id} act={act} busy={busy} />
-                        <SessionAutomation
-                          id={s.id}
-                          runs={
-                            state.automation?.filter(
-                              (r) => r.session_id === s.id,
-                            ) || []
-                          }
-                          act={act}
-                          busy={busy}
-                        />
-                        <div className="join-link">
-                          <Button
-                            variant="ghost"
-                            disabled={!state.shareOrigin}
-                            onClick={() => {
-                              void navigator.clipboard
-                                .writeText(
-                                  `${state.shareOrigin}/?session=${encodeURIComponent(s.id)}`,
-                                )
-                                .then(() => {
-                                  setFailed(false);
-                                  setToast("Join link copied");
-                                })
-                                .catch(() => {
-                                  setFailed(true);
-                                  setToast("Could not copy link");
-                                });
-                            }}
-                          >
-                            Copy join link
-                          </Button>
-                          {joinQr[s.id] && (
-                            <img
-                              src={joinQr[s.id]}
-                              width={160}
-                              height={160}
-                              alt="Scan to open the join page"
+                            </div>
+                            <SessionControls id={s.id} act={act} busy={busy} />
+                            <SessionAutomation
+                              id={s.id}
+                              runs={
+                                state.automation?.filter(
+                                  (r) => r.session_id === s.id,
+                                ) || []
+                              }
+                              act={act}
+                              busy={busy}
                             />
-                          )}
-                          {!state.shareOrigin && (
-                            <p>
-                              Connect the server to Wi-Fi or Ethernet to share a
-                              join link.
-                            </p>
-                          )}
-                        </div>
-                      </section>
-                    ))}
-                  </div>
+                            <div className="join-link">
+                              <Button
+                                variant="ghost"
+                                disabled={!state.shareOrigin}
+                                onClick={() => {
+                                  void navigator.clipboard
+                                    .writeText(
+                                      `${state.shareOrigin}/?session=${encodeURIComponent(s.id)}`,
+                                    )
+                                    .then(() => {
+                                      setFailed(false);
+                                      setToast("Join link copied");
+                                    })
+                                    .catch(() => {
+                                      setFailed(true);
+                                      setToast("Could not copy link");
+                                    });
+                                }}
+                              >
+                                Copy join link
+                              </Button>
+                              {joinQr[s.id] && (
+                                <img
+                                  src={joinQr[s.id]}
+                                  width={160}
+                                  height={160}
+                                  alt="Scan to open the join page"
+                                />
+                              )}
+                              {!state.shareOrigin && (
+                                <p>
+                                  Connect the server to Wi-Fi or Ethernet to
+                                  share a join link.
+                                </p>
+                              )}
+                            </div>
+                          </section>
+                        ))}
+                    </SessionSection>
+                  ))}
                   <section className="panel">
                     <h2>Activity</h2>
                     {state.events?.length ? (
@@ -1036,6 +1062,25 @@ automation:
           </p>
         </>
       )}
+    </details>
+  );
+}
+
+function SessionSection({
+  ended,
+  count,
+  children,
+}: {
+  ended: boolean;
+  count: number;
+  children: ReactNode;
+}) {
+  if (!ended) return <div className="session-grid">{children}</div>;
+  if (!count) return null;
+  return (
+    <details className="ended-sessions">
+      <summary>Ended sessions ({count})</summary>
+      <div className="session-grid">{children}</div>
     </details>
   );
 }

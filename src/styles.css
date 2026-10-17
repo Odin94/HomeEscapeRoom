@@ -469,6 +469,14 @@ textarea {
 .join .button {
   width: 100%;
 }
+.ended-sessions {
+  margin: 24px 0;
+}
+.ended-sessions > summary {
+  cursor: pointer;
+  font-size: 1.3rem;
+  margin-bottom: 16px;
+}
 .story {
   padding: 20px 0;
 }
