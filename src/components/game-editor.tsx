@@ -4,7 +4,79 @@ import { Plus, Trash2 } from "lucide-react";
 import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
-import { LightTransitionEditor } from "./light-transition-editor";
+import {
+  EntityPicker,
+  type Target,
+  LightTransitionEditor,
+} from "./light-transition-editor";
+function DevicePicker({
+  domain,
+  value,
+  change,
+}: {
+  domain: "control" | "notify";
+  value: string;
+  change: (value: string) => void;
+}) {
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function refresh() {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: domain === "notify" ? "speech-targets" : "control-targets",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Could not load devices.");
+      setTargets(data.targets);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Could not load devices.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void refresh();
+  }, [domain]);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={loading}
+        onClick={() => void refresh()}
+      >
+        {loading ? "Loading devices…" : "Refresh devices"}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      <EntityPicker
+        targets={targets}
+        domain={domain}
+        single
+        selected={value ? [value] : []}
+        change={(values) => change(values[0] || "")}
+      />
+      <label>
+        Selected entity
+        <input
+          required
+          maxLength={256}
+          value={value}
+          onChange={(event) => change(event.target.value)}
+        />
+      </label>
+    </>
+  );
+}
 const kinds = {
   external: "Alexa / external answer",
   text: "Enter text",
@@ -575,23 +647,17 @@ export function GameEditor({
                     </>
                   ) : (
                     <>
-                      <label>
-                        <input
-                          aria-labelledby={`action-${i}-${n}-label`}
-                          required
-                          placeholder="notify.living_room_speak"
-                          value={action.entity}
-                          onChange={(e) =>
-                            patch(i, {
-                              onComplete: a.onComplete!.map((v, k) =>
-                                k === n
-                                  ? { ...action, entity: e.target.value }
-                                  : v,
-                              ),
-                            })
-                          }
-                        />
-                      </label>
+                      <DevicePicker
+                        domain="notify"
+                        value={action.entity}
+                        change={(entity) =>
+                          patch(i, {
+                            onComplete: a.onComplete!.map((v, k) =>
+                              k === n ? { ...action, entity } : v,
+                            ),
+                          })
+                        }
+                      />
                       <label>
                         Spoken riddle
                         <textarea
@@ -756,26 +822,40 @@ export function GameEditor({
                 }
               />
             </div>
-            {(["id", "name", "entity"] as const).map((field) => (
-              <label key={field}>
-                {field === "entity"
-                  ? "Entity (light.*, scene.* or script.*)"
-                  : `Control ${field}`}
-                <input
-                  required
-                  maxLength={field === "entity" ? 256 : 80}
-                  value={control[field]}
-                  onChange={(e) =>
+            {(["id", "name", "entity"] as const).map((field) =>
+              field === "entity" ? (
+                <DevicePicker
+                  key={field}
+                  domain="control"
+                  value={control.entity}
+                  change={(entity) =>
                     setGame({
                       ...game,
                       controls: game.controls.map((c, n) =>
-                        n === i ? { ...c, [field]: e.target.value } : c,
+                        n === i ? { ...c, entity } : c,
                       ),
                     })
                   }
                 />
-              </label>
-            ))}
+              ) : (
+                <label key={field}>
+                  {`Control ${field}`}
+                  <input
+                    required
+                    maxLength={80}
+                    value={control[field]}
+                    onChange={(e) =>
+                      setGame({
+                        ...game,
+                        controls: game.controls.map((c, n) =>
+                          n === i ? { ...c, [field]: e.target.value } : c,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              ),
+            )}
           </div>
         ))}
         <Button

@@ -572,6 +572,8 @@ export async function handle(request: Request) {
     if (action === "speech-targets") {
       return reply({ targets: await speechTargets() });
     }
+    if (action === "control-targets")
+      return reply({ targets: await lightTargets("light|scene|script") });
     if (action === "light-targets")
       return reply({ targets: await lightTargets() });
     if (action === "speak") {

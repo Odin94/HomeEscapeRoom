@@ -38,12 +38,12 @@ export async function ha(path: string, body?: unknown) {
     );
   return response;
 }
-export async function lightTargets() {
+export async function lightTargets(domains = "light|scene") {
   const response = await ha("states");
   return z
     .array(entitySchema)
     .parse(await response.json())
-    .filter((e) => /^(light|scene)\./.test(e.entity_id))
+    .filter((e) => new RegExp(`^(${domains})\\.`).test(e.entity_id))
     .map((e) => ({
       entity: e.entity_id,
       name: e.attributes.friendly_name || e.entity_id,

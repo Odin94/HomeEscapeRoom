@@ -17,7 +17,12 @@ after(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 test("dynamic speech requires GM access and sends only to an available notification target", async () => {
-  for (const action of ["speech-targets", "speak", "light-targets"]) {
+  for (const action of [
+    "speech-targets",
+    "speak",
+    "light-targets",
+    "control-targets",
+  ]) {
     assert.equal((await call({ action })).status, 401);
   }
   const previous = settings();
@@ -52,6 +57,12 @@ test("dynamic speech requires GM access and sends only to an available notificat
           },
           { entity_id: "notify.mobile_app", state: "idle", attributes: {} },
           { entity_id: "light.study", state: "on", attributes: {} },
+          {
+            entity_id: "script.riddle",
+            state: "off",
+            attributes: { friendly_name: "Riddle" },
+          },
+          { entity_id: "scene.dusk", state: "unavailable", attributes: {} },
         ]);
       sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
       return Response.json([]);
@@ -63,6 +74,15 @@ test("dynamic speech requires GM access and sends only to an available notificat
     const lights = await (await call({ action: "light-targets" }, gm)).json();
     assert.deepEqual(lights.targets, [
       { entity: "light.study", name: "light.study", available: true },
+      { entity: "scene.dusk", name: "scene.dusk", available: false },
+    ]);
+    const controls = await (
+      await call({ action: "control-targets" }, gm)
+    ).json();
+    assert.deepEqual(controls.targets, [
+      { entity: "light.study", name: "light.study", available: true },
+      { entity: "script.riddle", name: "Riddle", available: true },
+      { entity: "scene.dusk", name: "scene.dusk", available: false },
     ]);
     assert.equal(
       discovered.targets.find(

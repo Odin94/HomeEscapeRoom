@@ -4,23 +4,27 @@ import type { LightStep, LightTransition } from "../lib/light-transition";
 import { Button } from "./ui";
 import { RemoveButton } from "./game-editor";
 
-type Target = { entity: string; name: string; available?: boolean };
-function EntityPicker({
+export type Target = { entity: string; name: string; available?: boolean };
+export function EntityPicker({
   targets,
   selected,
   domain,
   change,
+  single = domain === "scene",
 }: {
   targets: Target[];
   selected: string[];
-  domain: "light" | "scene";
+  domain: "light" | "scene" | "control" | "notify";
+  single?: boolean;
   change: (entities: string[]) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const options = targets.filter(
     (t) =>
-      t.entity.startsWith(`${domain}.`) &&
+      (domain === "control"
+        ? /^(light|scene|script)\./.test(t.entity)
+        : t.entity.startsWith(`${domain}.`)) &&
       `${t.name} ${t.entity}`.toLowerCase().includes(filter.toLowerCase()),
   );
   const rowHeight = 64;
@@ -35,8 +39,8 @@ function EntityPicker({
     >
       <summary>
         {selected.length
-          ? `${selected.length} ${domain === "light" ? "lights" : "scene"} selected`
-          : `Choose ${domain === "light" ? "lights" : "a scene"}`}
+          ? `${selected.length} ${domain === "light" ? "lights" : domain === "control" ? "control" : domain === "notify" ? "speaker" : "scene"} selected`
+          : `Choose ${domain === "light" ? "lights" : domain === "control" ? "a light, scene or script" : domain === "notify" ? "an Alexa speaker" : "a scene"}`}
       </summary>
       <label>
         Filter by name or entity
@@ -50,7 +54,7 @@ function EntityPicker({
               ?.querySelector(".entity-options");
             if (list) list.scrollTop = 0;
           }}
-          placeholder={`Search ${domain === "light" ? "lights" : "scenes"}…`}
+          placeholder={`Search ${domain === "light" ? "lights" : domain === "notify" ? "speakers" : domain === "control" ? "lights, scenes or scripts" : "scenes"}…`}
         />
       </label>
       <div
@@ -76,7 +80,7 @@ function EntityPicker({
                 checked={selected.includes(target.entity)}
                 onChange={(e) =>
                   change(
-                    domain === "scene"
+                    single
                       ? e.target.checked
                         ? [target.entity]
                         : []
@@ -103,17 +107,17 @@ function EntityPicker({
       <label>
         Enter an entity ID
         <input
-          placeholder={`${domain}.living_room`}
+          placeholder={`${domain === "control" ? "scene" : domain}.living_room`}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
             e.preventDefault();
             const entity = e.currentTarget.value.trim();
-            if (new RegExp(`^${domain}\\.[a-z0-9_]+$`).test(entity)) {
-              change(
-                domain === "scene"
-                  ? [entity]
-                  : [...new Set([...selected, entity])],
-              );
+            if (
+              new RegExp(
+                `^${domain === "control" ? "(light|scene|script)" : domain}\\.[a-z0-9_]+$`,
+              ).test(entity)
+            ) {
+              change(single ? [entity] : [...new Set([...selected, entity])]);
               e.currentTarget.value = "";
             } else
               e.currentTarget.setCustomValidity(`Enter a ${domain} entity ID.`);
