@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
@@ -10,6 +11,39 @@ const kinds = {
   symbols: "Select symbols in order",
   qr: "Scan QR code",
 };
+function RemoveButton({
+  label,
+  configured,
+  disabled,
+  remove,
+}: {
+  label: string;
+  configured: boolean;
+  disabled?: boolean;
+  remove: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="remove-item"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (
+          !configured ||
+          window.confirm(`${label}? Its configured values will be lost.`)
+        )
+          remove();
+      }}
+    >
+      <Trash2 size={18} aria-hidden="true" />
+    </Button>
+  );
+}
 export function GameEditor({
   initial,
   isNew = false,
@@ -117,6 +151,29 @@ export function GameEditor({
         <details className="challenge-editor" key={i} open>
           <summary>
             Challenge {i + 1}: {a.name || "Unnamed room"}
+            <RemoveButton
+              label="Remove challenge"
+              disabled={game.areas.length === 1}
+              configured={
+                !/^challenge-\d+$/.test(a.id) ||
+                a.name !== "New room" ||
+                a.kind !== "text" ||
+                !!a.hint ||
+                !!a.description ||
+                !!a.unlockCode ||
+                !!a.caseSensitive ||
+                !!a.qrMode ||
+                !!a.choices?.length ||
+                !!a.onComplete?.length ||
+                (a.playerView !== undefined && a.playerView !== "narrative")
+              }
+              remove={() =>
+                setGame({
+                  ...game,
+                  areas: game.areas.filter((_, n) => n !== i),
+                })
+              }
+            />
           </summary>
           <div className="challenge-fields">
             <label>
@@ -248,11 +305,31 @@ export function GameEditor({
               </p>
               {(a.onComplete || []).map((action, n) => (
                 <div className="editor-item" key={n}>
+                  <div className="editor-item-header">
+                    <span id={`action-${i}-${n}-label`}>
+                      {action.type === "control"
+                        ? "Home Assistant control"
+                        : "Speaker entity"}
+                    </span>
+                    <RemoveButton
+                      label="Remove action"
+                      configured={
+                        action.type === "control"
+                          ? !!action.controlId || action.on === false
+                          : !!action.entity || !!action.message
+                      }
+                      remove={() =>
+                        patch(i, {
+                          onComplete: a.onComplete!.filter((_, k) => k !== n),
+                        })
+                      }
+                    />
+                  </div>
                   {action.type === "control" ? (
                     <>
                       <label>
-                        Home Assistant control
                         <select
+                          aria-labelledby={`action-${i}-${n}-label`}
                           required
                           value={action.controlId}
                           onChange={(e) =>
@@ -293,8 +370,8 @@ export function GameEditor({
                   ) : (
                     <>
                       <label>
-                        Speaker entity
                         <input
+                          aria-labelledby={`action-${i}-${n}-label`}
                           required
                           placeholder="notify.living_room_speak"
                           value={action.entity}
@@ -328,17 +405,6 @@ export function GameEditor({
                       </label>
                     </>
                   )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() =>
-                      patch(i, {
-                        onComplete: a.onComplete!.filter((_, k) => k !== n),
-                      })
-                    }
-                  >
-                    Remove action
-                  </Button>
                 </div>
               ))}
               <div className="actions">
@@ -352,7 +418,7 @@ export function GameEditor({
                         ...(a.onComplete || []),
                         {
                           type: "control",
-                          controlId: game.controls[0]?.id || "",
+                          controlId: "",
                           on: true,
                         },
                       ],
@@ -397,19 +463,6 @@ export function GameEditor({
               >
                 Move up
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={game.areas.length === 1}
-                onClick={() =>
-                  setGame({
-                    ...game,
-                    areas: game.areas.filter((_, n) => n !== i),
-                  })
-                }
-              >
-                Remove challenge
-              </Button>
             </div>
           </div>
         </details>
@@ -442,6 +495,30 @@ export function GameEditor({
         <legend>Home Assistant controls</legend>
         {game.controls.map((control, i) => (
           <div className="editor-item" key={i}>
+            <div className="editor-item-header">
+              <span>{control.name || "Home Assistant control"}</span>
+              <RemoveButton
+                label="Remove control"
+                configured={
+                  !/^control-\d+$/.test(control.id) ||
+                  control.name !== "New control" ||
+                  control.entity !== "light." ||
+                  game.areas.some((area) =>
+                    area.onComplete?.some(
+                      (action) =>
+                        action.type === "control" &&
+                        action.controlId === control.id,
+                    ),
+                  )
+                }
+                remove={() =>
+                  setGame({
+                    ...game,
+                    controls: game.controls.filter((_, n) => n !== i),
+                  })
+                }
+              />
+            </div>
             {(["id", "name", "entity"] as const).map((field) => (
               <label key={field}>
                 {field === "entity"
@@ -462,18 +539,6 @@ export function GameEditor({
                 />
               </label>
             ))}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() =>
-                setGame({
-                  ...game,
-                  controls: game.controls.filter((_, n) => n !== i),
-                })
-              }
-            >
-              Remove control
-            </Button>
           </div>
         ))}
         <Button

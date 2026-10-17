@@ -478,3 +478,19 @@ textarea {
     break-inside: avoid;
   }
 }
+
+.editor-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.game-editor .remove-item {
+  flex-shrink: 0;
+  padding: 10px;
+  line-height: 1;
+}
+.challenge-editor > summary .remove-item {
+  float: right;
+  margin-top: -8px;
+}
