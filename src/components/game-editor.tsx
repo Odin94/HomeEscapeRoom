@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
@@ -301,9 +301,150 @@ export function GameEditor({
                 onChange={(e) => patch(i, { description: e.target.value })}
               />
             </label>
-            {["colors", "symbols"].includes(a.kind) && (
+            {a.kind === "colors" && (
+              <>
+                <fieldset className="color-answer-editor">
+                  <legend>Color options</legend>
+                  <p>2–12 unique colors.</p>
+                  {(a.choices || []).map((color, n) => (
+                    <div className="color-answer-row" key={n}>
+                      <label>
+                        Color {n + 1}
+                        <input
+                          type="color"
+                          value={color}
+                          onChange={(e) =>
+                            patch(i, {
+                              choices: a.choices!.map((value, k) =>
+                                k === n ? e.target.value : value,
+                              ),
+                              unlockCode: (a.unlockCode || "")
+                                .split("|")
+                                .map((value) =>
+                                  value.toLowerCase() === color.toLowerCase()
+                                    ? e.target.value
+                                    : value,
+                                )
+                                .join("|"),
+                            })
+                          }
+                        />
+                      </label>
+                      <RemoveButton
+                        label={`Remove color ${n + 1}`}
+                        configured={false}
+                        disabled={a.choices!.length <= 2}
+                        remove={() =>
+                          patch(i, {
+                            choices: a.choices!.filter((_, k) => k !== n),
+                            unlockCode: (a.unlockCode || "")
+                              .split("|")
+                              .filter(
+                                (value) =>
+                                  value.toLowerCase() !== color.toLowerCase(),
+                              )
+                              .join("|"),
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={(a.choices?.length || 0) >= 12}
+                    onClick={() => {
+                      let color = "#00ff00";
+                      while (
+                        a.choices?.some(
+                          (value) => value.toLowerCase() === color,
+                        )
+                      )
+                        color = `#${(parseInt(color.slice(1), 16) + 1).toString(16).padStart(6, "0")}`;
+                      patch(i, { choices: [...(a.choices || []), color] });
+                    }}
+                  >
+                    <Plus size={18} aria-hidden="true" /> Add color
+                  </Button>
+                </fieldset>
+                <fieldset className="color-answer-editor">
+                  <legend>Correct order</legend>
+                  <p>2–20 colors; repetitions allowed.</p>
+                  {(a.unlockCode ? a.unlockCode.split("|") : []).map(
+                    (color, n, order) => (
+                      <div className="color-answer-row" key={n}>
+                        <label>
+                          Step {n + 1}
+                          <span className="color-order-select">
+                            <span
+                              className="color-order-swatch"
+                              style={{ backgroundColor: color }}
+                              aria-hidden="true"
+                            />
+                            <select
+                              required
+                              value={color}
+                              onChange={(e) =>
+                                patch(i, {
+                                  unlockCode: order
+                                    .map((value, k) =>
+                                      k === n ? e.target.value : value,
+                                    )
+                                    .join("|"),
+                                })
+                              }
+                            >
+                              {!a.choices?.includes(color) && (
+                                <option value={color} disabled>
+                                  Choose a color
+                                </option>
+                              )}
+                              {a.choices?.map((value, k) => (
+                                <option key={k} value={value}>
+                                  Color {k + 1} ({value})
+                                </option>
+                              ))}
+                            </select>
+                          </span>
+                        </label>
+                        <RemoveButton
+                          label={`Remove step ${n + 1}`}
+                          configured={false}
+                          remove={() =>
+                            patch(i, {
+                              unlockCode: order
+                                .filter((_, k) => k !== n)
+                                .join("|"),
+                            })
+                          }
+                        />
+                      </div>
+                    ),
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      !a.choices?.length ||
+                      (a.unlockCode ? a.unlockCode.split("|").length : 0) >= 20
+                    }
+                    onClick={() =>
+                      patch(i, {
+                        unlockCode: [
+                          ...(a.unlockCode ? a.unlockCode.split("|") : []),
+                          a.choices![0],
+                        ].join("|"),
+                      })
+                    }
+                  >
+                    <Plus size={18} aria-hidden="true" /> Add step
+                  </Button>
+                </fieldset>
+              </>
+            )}
+            {a.kind === "symbols" && (
               <label>
-                Choices, separated by | (2–12 unique values; colors use #rrggbb)
+                Choices, separated by | (2–12 unique values)
                 <input
                   required
                   value={a.choices?.join("|") || ""}
@@ -313,20 +454,22 @@ export function GameEditor({
                 />
               </label>
             )}
-            <label>
-              {a.kind === "qr"
-                ? "QR token (use a unique value)"
-                : ["colors", "symbols"].includes(a.kind)
-                  ? "Correct order, separated by | (2–20 choices; repetitions allowed)"
-                  : "Correct answer"}
-              <input
-                required
-                maxLength={256}
-                pattern={a.kind === "numbers" ? "[0-9]+" : undefined}
-                value={a.unlockCode || ""}
-                onChange={(e) => patch(i, { unlockCode: e.target.value })}
-              />
-            </label>
+            {a.kind !== "colors" && (
+              <label>
+                {a.kind === "qr"
+                  ? "QR token (use a unique value)"
+                  : ["colors", "symbols"].includes(a.kind)
+                    ? "Correct order, separated by | (2–20 choices; repetitions allowed)"
+                    : "Correct answer"}
+                <input
+                  required
+                  maxLength={256}
+                  pattern={a.kind === "numbers" ? "[0-9]+" : undefined}
+                  value={a.unlockCode || ""}
+                  onChange={(e) => patch(i, { unlockCode: e.target.value })}
+                />
+              </label>
+            )}
             {["text", "external"].includes(a.kind) && (
               <label>
                 <input
