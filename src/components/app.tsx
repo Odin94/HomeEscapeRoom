@@ -1,3 +1,4 @@
+import { GameMarkdown } from "./game-markdown";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
@@ -421,6 +422,7 @@ export function App() {
                         key={editor}
                         initial={JSON.parse(editor)}
                         isNew={creatingGame}
+                        shareOrigin={state.shareOrigin}
                         busy={busy}
                         save={async (draft) => {
                           const success = await act(
@@ -435,11 +437,13 @@ export function App() {
                   </section>
                   {game?.areas.map((a) => (
                     <section className="panel" key={a.id}>
-                      <h2>{a.name}</h2>
+                      <h2>
+                        <GameMarkdown inline>{a.name}</GameMarkdown>
+                      </h2>
                       <p>
                         {a.kind} · {a.playerView}
                       </p>
-                      <p>{a.description}</p>
+                      <GameMarkdown>{a.description}</GameMarkdown>
                       <p>
                         Answer: <code>{a.unlockCode}</code>
                       </p>
@@ -611,7 +615,9 @@ export function App() {
           </section>
         ) : (
           <article className="story">
-            <h1>{state.player.session.name}</h1>
+            <h1>
+              <GameMarkdown inline>{state.player.session.name}</GameMarkdown>
+            </h1>
             {state.player.session.status !== "running" && (
               <p className="session-status">
                 {state.player.session.status === "open"
@@ -625,8 +631,10 @@ export function App() {
               .filter((_, i) => i < state.player!.session.progress)
               .map((a) => (
                 <section key={a.id} data-view={a.playerView || "narrative"}>
-                  <h2>{a.name}</h2>
-                  <p>{a.description}</p>
+                  <h2>
+                    <GameMarkdown inline>{a.name}</GameMarkdown>
+                  </h2>
+                  <GameMarkdown>{a.description}</GameMarkdown>
                 </section>
               ))}
             {state.automationPending && (
@@ -657,7 +665,9 @@ export function App() {
                 }}
               >
                 {state.areas[state.player.session.progress]?.hint && (
-                  <p>{state.areas[state.player.session.progress].hint}</p>
+                  <GameMarkdown>
+                    {state.areas[state.player.session.progress].hint}
+                  </GameMarkdown>
                 )}
                 <ChallengeInput
                   key={`${state.player.session_id}-${state.player.session.progress}`}

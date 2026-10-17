@@ -1,3 +1,5 @@
+import { GameMarkdown } from "./game-markdown";
+import { QrToken } from "./qr-token";
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Plus, Trash2 } from "lucide-react";
@@ -162,11 +164,13 @@ export function RemoveButton({
 export function GameEditor({
   initial,
   isNew = false,
+  shareOrigin,
   busy,
   save,
 }: {
   initial: Game;
   isNew?: boolean;
+  shareOrigin?: string;
   busy: boolean;
   save: (game: Game) => Promise<boolean>;
 }) {
@@ -225,7 +229,7 @@ export function GameEditor({
         />
       </label>
       <label>
-        Game name
+        Game name (Markdown)
         <input
           required
           maxLength={80}
@@ -260,9 +264,12 @@ export function GameEditor({
         Start on first join and allow joining while running
       </label>
       <p>
-        1–30 challenges, played in order. IDs must be unique lowercase slugs.
-        Saving replaces this game's JSON file; existing sessions keep their
-        snapshot.
+        Names, clues, stories, and symbol choices support Markdown. Use
+        **bold**, *italic*, and `code`; clues and stories also support headings,
+        lists, links, and images. IDs, answers, device settings, and spoken text
+        are literal. 1–30 challenges, played in order. IDs must be unique
+        lowercase slugs. Saving replaces this game's JSON file; existing
+        sessions keep their snapshot.
       </p>
       {game.areas.map((a, i) => (
         <details className="challenge-editor" key={i} open>
@@ -304,7 +311,7 @@ export function GameEditor({
               />
             </label>
             <label>
-              Room name
+              Room name (Markdown)
               <input
                 required
                 maxLength={80}
@@ -357,8 +364,8 @@ export function GameEditor({
             )}
             <label>
               {a.kind === "qr" && a.qrMode !== "prompted"
-                ? "Clue for finding the QR code (optional)"
-                : "Clue before solving"}
+                ? "Clue for finding the QR code (optional) (Markdown)"
+                : "Clue before solving (Markdown)"}
               <textarea
                 maxLength={1000}
                 value={a.hint}
@@ -366,7 +373,7 @@ export function GameEditor({
               />
             </label>
             <label>
-              Story revealed after solving
+              Story revealed after solving (Markdown)
               <textarea
                 maxLength={10000}
                 value={a.description}
@@ -518,7 +525,7 @@ export function GameEditor({
             )}
             {a.kind === "symbols" && (
               <label>
-                Choices, separated by | (2–12 unique values)
+                Choices (Markdown), separated by | (2–12 unique values)
                 <input
                   required
                   value={a.choices?.join("|") || ""}
@@ -543,6 +550,9 @@ export function GameEditor({
                   onChange={(e) => patch(i, { unlockCode: e.target.value })}
                 />
               </label>
+            )}
+            {a.kind === "qr" && (
+              <QrToken token={a.unlockCode || ""} origin={shareOrigin} />
             )}
             {["text", "external"].includes(a.kind) && (
               <label>
@@ -986,12 +996,20 @@ export function ChallengeInput({
                     }}
                   />
                 )}
-                {choice}
+                <GameMarkdown inline>{choice}</GameMarkdown>
               </Button>
             ))}
           </div>
           <output className="answer-sequence" aria-live="polite">
-            {code.split("|").filter(Boolean).join(" → ")}
+            {code
+              .split("|")
+              .filter(Boolean)
+              .map((choice, index) => (
+                <span key={index}>
+                  {index > 0 && " → "}
+                  <GameMarkdown inline>{choice}</GameMarkdown>
+                </span>
+              ))}
           </output>
           <div className="actions">
             <Button

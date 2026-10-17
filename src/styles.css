@@ -492,6 +492,27 @@ textarea {
   color: #344837;
   line-height: 1.9;
 }
+.game-markdown {
+  overflow-wrap: anywhere;
+}
+.game-markdown img {
+  max-width: 100%;
+  height: auto;
+}
+.game-markdown pre {
+  overflow-x: auto;
+}
+.game-markdown ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+.game-markdown ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.game-markdown a {
+  text-decoration: underline;
+}
 .unlock {
   margin: 50px 0 24px;
 }
@@ -646,7 +667,18 @@ textarea {
     flex-basis: 100%;
   }
 }
+.token-print-sheet {
+  display: none;
+}
 @media print {
+  body:has(> .token-print-sheet) > :not(.token-print-sheet) {
+    display: none !important;
+  }
+  .token-print-sheet {
+    display: block;
+    padding: 20mm;
+    text-align: center;
+  }
   @page {
     margin: 0;
   }
