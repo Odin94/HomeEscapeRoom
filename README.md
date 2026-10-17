@@ -122,8 +122,8 @@ ID replaces that definition. Sessions retain their original snapshots.
 - Text answers ignore case and surrounding whitespace.
 - Number answers contain only digits and preserve leading zeroes.
 - Color and symbol challenges offer 2–12 unique choices and require an ordered answer of 2–20 choices separated by `|`. Repetitions are allowed. Choices cannot contain `|`; colors use six-digit hex values such as `#ff0000`.
-- QR challenges use an exact, case-sensitive token. `qrMode: "prompted"` offers a camera/photo input in the app, decoded locally; players can also open the printed link with their phone camera. `qrMode: "hidden"` shows no scanner or hint: players discover and scan the physical marker externally, then confirm Unlock. Omitted QR mode retains legacy hidden behavior. Generate printable markers with **Show QR** in admin.
-- Hints are limited to 1,000 characters, revealed story text to 10,000, and answers to 256. Hidden QR challenges cannot have hints. Answers never appear in player API responses.
+- QR challenges use an exact, case-sensitive token. `qrMode: "prompted"` offers a camera/photo input in the app, decoded locally; players can also open the printed link with their phone camera. `qrMode: "hidden"` shows no scanner and optionally provides a clue for finding the code: players discover and scan the physical marker externally, then confirm Unlock. Omitted QR mode retains legacy hidden behavior. Generate printable markers with **Show QR** in admin.
+- Hints are limited to 1,000 characters, revealed story text to 10,000, and answers to 256. Hidden QR challenges may include an optional hint for finding the code. Answers never appear in player API responses.
 - **Show QR** includes optional Markdown text above and below the marker, with a live preview. **Print marker** prints only that content and the QR code, with no default labels. The print layout suppresses browser headers and footers; if your browser still adds a date, title or URL, turn off **Headers and footers** in its print dialog. Marker text is a temporary print draft and resets when you close it or show another marker.
 - Up to 50 Home Assistant controls may be configured, with unique slug IDs and `light.*`, `scene.*`, or `script.*` entity IDs.
 
@@ -147,7 +147,7 @@ Existing sessions keep their original game snapshots. Scan the physical marker
 from **Games → Show QR** to generate its printable URL. Room markers now submit
 automatically when the session is running; QR photo decoding in the app also
 submits without an extra Unlock tap. A wrong scan reports an error; scan again
-to retry. Hidden QR challenges still do not display a scanner or hint.
+to retry. Hidden QR challenges do not display a scanner; an optional clue can help players find the code.
 
 ### Wire Alexa's answer back to the session
 

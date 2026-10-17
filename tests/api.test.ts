@@ -463,3 +463,51 @@ test("all challenge types progress through API without exposing answers or hidde
     );
   }
 });
+
+test("hidden QR finding clues appear only at the current challenge", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const game = {
+    id: "hidden-clues",
+    name: "Hidden clues",
+    controls: [],
+    areas: ["first", "second"].map((id) => ({
+      id,
+      name: id,
+      kind: "qr",
+      qrMode: "hidden",
+      hint: `Find the ${id} marker beneath the lamp.`,
+      description: "Discovered",
+      unlockCode: `secret-${id}`,
+    })),
+  };
+  assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+  const created = await (
+    await call({ action: "create", gameId: game.id, name: "Clue seekers" }, gm)
+  ).json();
+  const joined = await call({ action: "join", id: created.id, name: "Seeker" });
+  const player = joined.headers.get("set-cookie")!.split(";")[0];
+  await call({ action: "status", id: created.id, status: "running" }, gm);
+  for (let progress = 0; progress <= 2; progress++) {
+    const state = await (await call(undefined, player)).json();
+    for (let index = 0; index < 2; index++) {
+      assert.equal(
+        state.areas[index].hint,
+        index === progress ? game.areas[index].hint : "",
+      );
+      assert.equal(state.areas[index].kind, "hidden");
+      assert.equal(state.areas[index].unlockCode, undefined);
+      assert.equal(state.areas[index].qrMode, undefined);
+    }
+    if (progress < 2)
+      assert.equal(
+        (
+          await call(
+            { action: "unlock", code: game.areas[progress].unlockCode },
+            player,
+          )
+        ).status,
+        200,
+      );
+  }
+});

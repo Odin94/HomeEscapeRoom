@@ -58,7 +58,6 @@ test("creation rejects unknown fields, invalid combinations and malformed sequen
     { kind: "numbers", unlockCode: "4.2" },
     { kind: "text", unlockCode: "x", choices: ["a", "b"] },
     { kind: "text", unlockCode: "x", qrMode: "hidden" },
-    { kind: "qr", unlockCode: "x", qrMode: "hidden", hint: "Scan me" },
     { kind: "symbols", unlockCode: "a|c", choices: ["a", "b"] },
     { kind: "symbols", unlockCode: "a|a", choices: ["a", "a"] },
     { kind: "colors", unlockCode: "red|blue", choices: ["red", "blue"] },
@@ -153,5 +152,16 @@ test("every answer type trims surrounding whitespace in input and saved snapshot
     game.areas[0].unlockCode = ` \n${unlockCode}\t `;
     assert.equal(nextUnlock(0, `\r\n ${unlockCode} \t\n`, game), 1);
     assert.throws(() => nextUnlock(0, " \n\t", game));
+  }
+});
+
+test("hidden QR clues are optional for explicit and legacy modes", () => {
+  for (const qrMode of ["hidden", undefined]) {
+    for (const hint of ["", "Look beneath the lamp."]) {
+      const game = gameSchema.parse(
+        makeGame({ kind: "qr", qrMode, hint, unlockCode: "marker" }),
+      );
+      assert.equal(game.areas[0].hint, hint);
+    }
   }
 });

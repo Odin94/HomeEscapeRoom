@@ -91,12 +91,6 @@ export const gameSchema = z
               issue("Choices are only allowed for colors and symbols.");
             if (area.kind !== "qr" && area.qrMode !== undefined)
               issue("QR mode is only allowed for QR challenges.");
-            if (
-              area.kind === "qr" &&
-              area.qrMode !== "prompted" &&
-              area.hint.trim()
-            )
-              issue("Hidden QR challenges must not have a hint.");
           }),
       )
       .min(1)

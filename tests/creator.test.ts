@@ -161,3 +161,18 @@ test("external answers show a waiting state without a phone answer field", () =>
   assert.ok(!html.includes("<input"));
   assert.ok(!html.includes("Unlock"));
 });
+
+test("hidden QR editor offers an optional finding clue", () => {
+  const game = structuredClone(loadGames()[0]);
+  game.areas[0].qrMode = "hidden";
+  game.areas[0].hint = "Look beneath the lamp.";
+  const html = renderToStaticMarkup(
+    createElement(GameEditor, {
+      initial: game,
+      busy: false,
+      save: async () => true,
+    }),
+  );
+  assert.ok(html.includes("Clue for finding the QR code (optional)"));
+  assert.ok(html.includes("Look beneath the lamp."));
+});

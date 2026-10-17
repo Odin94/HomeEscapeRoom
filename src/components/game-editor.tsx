@@ -171,7 +171,6 @@ export function GameEditor({
                   onChange={(e) =>
                     patch(i, {
                       qrMode: e.target.value as "hidden" | "prompted",
-                      hint: "",
                     })
                   }
                 >
@@ -182,16 +181,16 @@ export function GameEditor({
                 </select>
               </label>
             )}
-            {!(a.kind === "qr" && a.qrMode !== "prompted") && (
-              <label>
-                Clue before solving
-                <textarea
-                  maxLength={1000}
-                  value={a.hint}
-                  onChange={(e) => patch(i, { hint: e.target.value })}
-                />
-              </label>
-            )}
+            <label>
+              {a.kind === "qr" && a.qrMode !== "prompted"
+                ? "Clue for finding the QR code (optional)"
+                : "Clue before solving"}
+              <textarea
+                maxLength={1000}
+                value={a.hint}
+                onChange={(e) => patch(i, { hint: e.target.value })}
+              />
+            </label>
             <label>
               Story revealed after solving
               <textarea
