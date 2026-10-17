@@ -980,37 +980,62 @@ export function ChallengeInput({
       ) : null}
       {["colors", "symbols"].includes(area.kind) ? (
         <>
-          <p>Select the choices in order. Repeated choices are allowed.</p>
-          <div className="actions">
+          <div
+            className="challenge-choices"
+            role="group"
+            aria-label="Choose in order; repeated choices allowed"
+          >
             {area.choices?.map((choice) => (
               <Button
                 type="button"
                 key={choice}
+                className={
+                  area.kind === "colors" ? "color-choice" : "symbol-choice"
+                }
+                style={
+                  area.kind === "colors"
+                    ? { backgroundColor: choice }
+                    : undefined
+                }
+                aria-label={
+                  area.kind === "colors" ? `Add color ${choice}` : undefined
+                }
                 disabled={disabled || code.split("|").length >= 20}
                 onClick={() => setCode(code ? `${code}|${choice}` : choice)}
               >
-                {area.kind === "colors" && (
-                  <span
-                    style={{
-                      backgroundColor: choice,
-                      width: 24,
-                      height: 24,
-                      display: "inline-block",
-                    }}
-                  />
+                {area.kind !== "colors" && (
+                  <GameMarkdown inline>{choice}</GameMarkdown>
                 )}
-                <GameMarkdown inline>{choice}</GameMarkdown>
               </Button>
             ))}
           </div>
-          <output className="answer-sequence" aria-live="polite">
+          <output
+            className="answer-sequence choice-sequence"
+            aria-label="Selected order"
+            aria-live="polite"
+          >
             {code
               .split("|")
               .filter(Boolean)
               .map((choice, index) => (
-                <span key={index}>
-                  {index > 0 && " → "}
-                  <GameMarkdown inline>{choice}</GameMarkdown>
+                <span
+                  key={index}
+                  className={
+                    area.kind === "colors"
+                      ? "selected-color"
+                      : "selected-symbol"
+                  }
+                  style={
+                    area.kind === "colors"
+                      ? { backgroundColor: choice }
+                      : undefined
+                  }
+                >
+                  {area.kind === "colors" ? (
+                    <span className="sr-only">{`Position ${index + 1}: ${choice}. `}</span>
+                  ) : (
+                    <GameMarkdown inline>{choice}</GameMarkdown>
+                  )}
                 </span>
               ))}
           </output>

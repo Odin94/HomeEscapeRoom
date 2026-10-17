@@ -167,6 +167,16 @@ export function App() {
     state?.games?.find((g) => g.id === selected) || state?.games?.[0];
   return (
     <div className={adminPage ? "admin-shell" : "player-shell"}>
+      {!adminPage && state?.player && (
+        <Button
+          className="player-leave"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => act({ action: "leave" })}
+        >
+          Leave session
+        </Button>
+      )}
       {adminPage && (
         <header>
           <a href="/secretadmin" className="brand">
@@ -590,11 +600,6 @@ export function App() {
               {joinSession ? (
                 <>
                   <input type="hidden" name="id" value={joinSession} />
-                  <p>
-                    Joining{" "}
-                    {state.sessions.find((s) => s.id === joinSession)?.name ||
-                      "the linked session"}
-                  </p>
                 </>
               ) : (
                 <label>
@@ -605,9 +610,9 @@ export function App() {
                     </option>
                     {state.sessions
                       .filter((s) => s.acceptingPlayers)
-                      .map((s) => (
+                      .map((s, index) => (
                         <option key={s.id} value={s.id}>
-                          {s.name}
+                          Session {index + 1}
                         </option>
                       ))}
                   </select>
@@ -641,9 +646,6 @@ export function App() {
           </section>
         ) : (
           <article className="story">
-            <h1>
-              <GameMarkdown inline>{state.player.session.name}</GameMarkdown>
-            </h1>
             {state.player.session.status !== "running" && (
               <p className="session-status">
                 {state.player.session.status === "open"
@@ -657,9 +659,6 @@ export function App() {
               .filter((_, i) => i < state.player!.session.progress)
               .map((a) => (
                 <section key={a.id} data-view={a.playerView || "narrative"}>
-                  <h2>
-                    <GameMarkdown inline>{a.name}</GameMarkdown>
-                  </h2>
                   <GameMarkdown>{a.description}</GameMarkdown>
                 </section>
               ))}
@@ -708,9 +707,6 @@ export function App() {
                 />
               </form>
             )}
-            <Button variant="ghost" onClick={() => act({ action: "leave" })}>
-              Leave session
-            </Button>
           </article>
         )}
       </main>
