@@ -1,3 +1,4 @@
+import { moveVacuum } from "./vacuum.server";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { AlexaAnswers } from "./alexa-answers.server";
@@ -179,6 +180,7 @@ async function runActions(id: string) {
     try {
       const action = JSON.parse(run.payload);
       if (action.type === "speech") await speak(action);
+      else if (action.type === "vacuum") await moveVacuum(action);
       else if (action.type === "lights") {
         const transition = lightTransitionSchema.parse(action);
         await Promise.all(
@@ -618,6 +620,8 @@ export async function handle(request: Request) {
     if (action === "speech-targets") {
       return reply({ targets: await speechTargets() });
     }
+    if (action === "vacuum-targets")
+      return reply({ targets: await lightTargets("vacuum") });
     if (action === "control-targets")
       return reply({ targets: await lightTargets("light|scene|script") });
     if (action === "light-targets")

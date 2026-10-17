@@ -8,8 +8,10 @@ import {
 } from "node:fs";
 import { resolve, join } from "node:path";
 import { lightTransitionSchema } from "./light-transition";
+import { vacuumSchema } from "./vacuum";
 export const actionSchema = z.discriminatedUnion("type", [
   lightTransitionSchema,
+  vacuumSchema,
   z.strictObject({
     type: z.literal("control"),
     controlId: z.string().min(1),

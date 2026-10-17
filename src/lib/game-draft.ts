@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { lightStepSchema } from "./light-transition";
 
+import { vacuumDraftSchema } from "./vacuum";
+
 export const gameDraftKey = "threshold-new-game-draft-v1";
 
 // Drafts deliberately accept unfinished fields that cannot yet be saved as games.
@@ -28,6 +30,7 @@ const draftSchema = z.object({
         onComplete: z
           .array(
             z.discriminatedUnion("type", [
+              vacuumDraftSchema,
               z.object({
                 type: z.literal("lights"),
                 groups: z.array(

@@ -176,3 +176,46 @@ test("hidden QR editor offers an optional finding clue", () => {
   assert.ok(html.includes("Clue for finding the QR code (optional)"));
   assert.ok(html.includes("Look beneath the lamp."));
 });
+
+test("creator renders robot movement dropdowns and restores unfinished vacuum drafts", () => {
+  const game = structuredClone(loadGames()[0]);
+  game.areas[0].onComplete = [
+    {
+      type: "vacuum",
+      entity: "vacuum.roborock",
+      movement: "goto",
+      destination: "Living room",
+      x: 25000,
+      y: 27000,
+    },
+  ];
+  const html = renderToStaticMarkup(
+    createElement(GameEditor, {
+      initial: game,
+      busy: false,
+      save: async () => true,
+    }),
+  );
+  assert.ok(html.includes("Add robot vacuum action"));
+  assert.ok(html.includes("Go to room / position"));
+  assert.ok(html.includes("Spin left"));
+  assert.ok(html.includes("Living room (25000, 27000)"));
+  assert.ok(html.includes("Filter by name or entity"));
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    game.areas[0].onComplete = [
+      { type: "vacuum", entity: "", movement: "goto" },
+    ];
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: { getItem: () => JSON.stringify({ game, autoId: false }) },
+    });
+    assert.deepEqual(
+      readGameDraft()?.game.areas[0].onComplete,
+      game.areas[0].onComplete,
+    );
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});

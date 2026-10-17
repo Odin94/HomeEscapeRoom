@@ -14,7 +14,7 @@ export function EntityPicker({
 }: {
   targets: Target[];
   selected: string[];
-  domain: "light" | "scene" | "control" | "notify";
+  domain: "light" | "scene" | "control" | "notify" | "vacuum";
   single?: boolean;
   change: (entities: string[]) => void;
 }) {
@@ -39,8 +39,8 @@ export function EntityPicker({
     >
       <summary>
         {selected.length
-          ? `${selected.length} ${domain === "light" ? "lights" : domain === "control" ? "control" : domain === "notify" ? "speaker" : "scene"} selected`
-          : `Choose ${domain === "light" ? "lights" : domain === "control" ? "a light, scene or script" : domain === "notify" ? "an Alexa speaker" : "a scene"}`}
+          ? `${selected.length} ${domain === "light" ? "lights" : domain === "control" ? "control" : domain === "notify" ? "speaker" : domain === "vacuum" ? "vacuum" : "scene"} selected`
+          : `Choose ${domain === "light" ? "lights" : domain === "control" ? "a light, scene or script" : domain === "notify" ? "an Alexa speaker" : domain === "vacuum" ? "a robot vacuum" : "a scene"}`}
       </summary>
       <label>
         Filter by name or entity
@@ -54,7 +54,7 @@ export function EntityPicker({
               ?.querySelector(".entity-options");
             if (list) list.scrollTop = 0;
           }}
-          placeholder={`Search ${domain === "light" ? "lights" : domain === "notify" ? "speakers" : domain === "control" ? "lights, scenes or scripts" : "scenes"}…`}
+          placeholder={`Search ${domain === "light" ? "lights" : domain === "notify" ? "speakers" : domain === "vacuum" ? "vacuums" : domain === "control" ? "lights, scenes or scripts" : "scenes"}…`}
         />
       </label>
       <div

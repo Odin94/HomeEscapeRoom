@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { VacuumAction } from "./vacuum";
 import type { LightTransition } from "./light-transition";
 
 export type Game = {
@@ -13,6 +14,7 @@ export type Area = {
   name: string;
   kind: string;
   onComplete?: (
+    | VacuumAction
     | LightTransition
     | { type: "control"; controlId: string; on?: boolean }
     | { type: "speech"; entity: string; message: string }

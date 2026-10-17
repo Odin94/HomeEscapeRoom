@@ -34,7 +34,7 @@ export async function ha(path: string, body?: unknown) {
   }
   if (!response.ok)
     throw new Error(
-      `Home Assistant returned ${response.status}. Check your token and speaker.`,
+      `Home Assistant returned ${response.status}. Check your token, device and supported action.`,
     );
   return response;
 }

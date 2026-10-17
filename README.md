@@ -197,3 +197,18 @@ message. Also pause the session and confirm the voice routine cannot advance it.
 No game actions or integration credentials are included in player responses.
 
 References: [Alexa Smart Home integration and supported helpers](https://www.home-assistant.io/integrations/alexa.smart_home/), [toggle helpers](https://www.home-assistant.io/integrations/input_boolean/), [Alexa Devices speech](https://www.home-assistant.io/integrations/alexa_devices/).
+
+### Roborock challenge actions
+
+Under **When solved**, choose **Add robot vacuum action**, then select your
+`vacuum.*` entity from the searchable device dropdown. Movement options include
+forward, spin left/right (1-5 seconds), go to room / position, return to dock and
+stop. Short movements use Roborock remote commands; support varies by model.
+
+For go-to, name the destination and enter X/Y coordinates for a point in that
+room on the currently selected Roborock map. Named destinations already used by
+that vacuum in this game appear in the saved-destination dropdown. This sends a
+go-to command without starting room cleaning. Home Assistant room names alone
+do not supply go-to coordinates. Verify your coordinates and movement presets
+with your vacuum before using them in a live game. Saving a game does not move
+any devices; actions run after the challenge is solved.

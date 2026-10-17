@@ -1,3 +1,4 @@
+import type { VacuumAction } from "../lib/vacuum";
 import { GameMarkdown } from "./game-markdown";
 import { QrToken } from "./qr-token";
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +17,7 @@ function DevicePicker({
   value,
   change,
 }: {
-  domain: "control" | "notify";
+  domain: "control" | "notify" | "vacuum";
   value: string;
   change: (value: string) => void;
 }) {
@@ -31,7 +32,12 @@ function DevicePicker({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: domain === "notify" ? "speech-targets" : "control-targets",
+          action:
+            domain === "notify"
+              ? "speech-targets"
+              : domain === "vacuum"
+                ? "vacuum-targets"
+                : "control-targets",
         }),
       });
       const data = await response.json();
@@ -597,7 +603,9 @@ export function GameEditor({
                         ? "Light transition"
                         : action.type === "control"
                           ? "Home Assistant control"
-                          : "Speaker entity"}
+                          : action.type === "vacuum"
+                            ? "Robot vacuum"
+                            : "Speaker entity"}
                     </span>
                     <RemoveButton
                       label="Remove action"
@@ -606,7 +614,9 @@ export function GameEditor({
                           ? true
                           : action.type === "control"
                             ? !!action.controlId || action.on === false
-                            : !!action.entity || !!action.message
+                            : action.type === "vacuum"
+                              ? !!action.entity
+                              : !!action.entity || !!action.message
                       }
                       remove={() =>
                         patch(i, {
@@ -620,6 +630,28 @@ export function GameEditor({
                       value={action}
                       controls={game.controls}
                       onChange={(value) =>
+                        patch(i, {
+                          onComplete: a.onComplete!.map((v, k) =>
+                            k === n ? value : v,
+                          ),
+                        })
+                      }
+                    />
+                  ) : action.type === "vacuum" ? (
+                    <VacuumEditor
+                      destinations={game.areas.flatMap((area) =>
+                        (area.onComplete || []).filter(
+                          (item): item is VacuumAction =>
+                            item.type === "vacuum" &&
+                            item.movement === "goto" &&
+                            item.entity === action.entity &&
+                            !!item.destination &&
+                            item.x !== undefined &&
+                            item.y !== undefined,
+                        ),
+                      )}
+                      value={action}
+                      change={(value) =>
                         patch(i, {
                           onComplete: a.onComplete!.map((v, k) =>
                             k === n ? value : v,
@@ -768,6 +800,26 @@ export function GameEditor({
                   }
                 >
                   Add Alexa speech
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={(a.onComplete?.length || 0) >= 10}
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: [
+                        ...(a.onComplete || []),
+                        {
+                          type: "vacuum",
+                          entity: "",
+                          movement: "forward",
+                          seconds: 1,
+                        },
+                      ],
+                    })
+                  }
+                >
+                  Add robot vacuum action
                 </Button>
               </div>
             </fieldset>
@@ -1082,6 +1134,133 @@ export function ChallengeInput({
       {!["colors", "symbols"].includes(area.kind) && (
         <Button disabled={disabled || !code}>Unlock</Button>
       )}
+    </>
+  );
+}
+
+function VacuumEditor({
+  value,
+  change,
+  destinations,
+}: {
+  destinations: VacuumAction[];
+  value: VacuumAction;
+  change: (value: VacuumAction) => void;
+}) {
+  return (
+    <>
+      <DevicePicker
+        domain="vacuum"
+        value={value.entity}
+        change={(entity) => change({ ...value, entity: entity.trim() })}
+      />
+      <label>
+        Movement
+        <select
+          value={value.movement}
+          onChange={(e) =>
+            change({
+              ...value,
+              movement: e.target.value as VacuumAction["movement"],
+            })
+          }
+        >
+          <option value="goto">Go to room / position</option>
+          <option value="forward">Move forward a little</option>
+          <option value="spin-left">Spin left</option>
+          <option value="spin-right">Spin right</option>
+          <option value="dock">Return to dock</option>
+          <option value="stop">Stop</option>
+        </select>
+      </label>
+      {value.movement === "goto" ? (
+        <>
+          <label>
+            Saved room / destination
+            <select
+              value=""
+              onChange={(e) => {
+                const target = destinations[Number(e.target.value)];
+                if (target)
+                  change({
+                    ...value,
+                    destination: target.destination,
+                    x: target.x,
+                    y: target.y,
+                  });
+              }}
+            >
+              <option value="">
+                Choose a saved destination or enter one below
+              </option>
+              {destinations.map((target, index) => (
+                <option key={index} value={index}>
+                  {target.destination} ({target.x}, {target.y})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Room / destination name
+            <input
+              maxLength={80}
+              value={value.destination || ""}
+              onChange={(e) =>
+                change({ ...value, destination: e.target.value })
+              }
+              placeholder="Living room"
+            />
+          </label>
+          <p>
+            Enter a point inside this room from your Roborock map. Uses the
+            currently selected map and moves there without starting a clean.
+          </p>
+          {(["x", "y"] as const).map((axis) => (
+            <label key={axis}>
+              Map {axis.toUpperCase()}
+              <input
+                type="number"
+                required
+                min={0}
+                max={100000}
+                step={1}
+                value={value[axis] ?? ""}
+                onChange={(e) =>
+                  change({
+                    ...value,
+                    [axis]:
+                      e.target.value === ""
+                        ? undefined
+                        : Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+          ))}
+        </>
+      ) : ["forward", "spin-left", "spin-right"].includes(value.movement) ? (
+        <>
+          <label>
+            Duration
+            <select
+              value={value.seconds ?? 1}
+              onChange={(e) =>
+                change({ ...value, seconds: Number(e.target.value) })
+              }
+            >
+              {[1, 2, 3, 4, 5].map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {seconds} {seconds === 1 ? "second" : "seconds"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            Requires a Roborock model supporting remote commands. Movement stops
+            automatically after this duration.
+          </p>
+        </>
+      ) : null}
     </>
   );
 }
