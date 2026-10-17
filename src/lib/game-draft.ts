@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lightStepSchema } from "./light-transition";
 
 export const gameDraftKey = "threshold-new-game-draft-v1";
 
@@ -28,6 +29,24 @@ const draftSchema = z.object({
           .array(
             z.discriminatedUnion("type", [
               z.object({
+                type: z.literal("lights"),
+                groups: z.array(
+                  z.object({
+                    entities: z.array(z.string()),
+                    steps: z.array(
+                      z.union([
+                        lightStepSchema,
+                        z.object({
+                          mode: z.literal("scene"),
+                          entity: z.string(),
+                          seconds: z.number(),
+                        }),
+                      ]),
+                    ),
+                  }),
+                ),
+              }),
+              z.object({
                 type: z.literal("control"),
                 controlId: z.string(),
                 on: z.boolean().optional(),
@@ -45,9 +64,9 @@ const draftSchema = z.object({
   }),
 });
 
-export function readGameDraft() {
+export function readGameDraft(key = gameDraftKey) {
   try {
-    const raw = localStorage.getItem(gameDraftKey);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const result = draftSchema.safeParse(JSON.parse(raw));
     return result.success ? result.data : null;

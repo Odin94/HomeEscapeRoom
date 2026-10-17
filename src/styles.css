@@ -1,10 +1,113 @@
 @import "tailwindcss";
 :root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   font-family: system-ui, sans-serif;
   color: #263d35;
   background: #f4f6f0;
   font-size: 18px;
   font-synthesis: none;
+}
+.light-transition {
+  --light-surface: #f4f6f0;
+  --light-accent: #8dab72;
+  display: grid;
+  gap: 20px;
+}
+.light-group {
+  min-width: 0;
+  padding: 20px;
+  background: var(--light-surface);
+  border-radius: 12px;
+}
+.light-group h3 {
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+.light-step {
+  padding-block: 16px;
+  border-top: 1px solid #dce3d4;
+}
+.light-step-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 12px;
+}
+.light-step-fields input[type="color"] {
+  width: 100%;
+  height: 48px;
+  padding: 4px;
+  cursor: pointer;
+}
+.entity-picker {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  margin-block: 12px;
+}
+.entity-picker summary {
+  cursor: pointer;
+  padding: 8px;
+}
+.entity-options {
+  max-height: 240px;
+  overflow: auto;
+  scrollbar-color: #8dab72 #f4f6f0;
+  scrollbar-width: thin;
+}
+.game-editor .entity-option {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.entity-option:has(input:checked) {
+  background: #edf3e6;
+}
+.entity-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entity-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.selected-lights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.light-transition .button {
+  transition:
+    transform 150ms var(--ease-out),
+    opacity 150ms var(--ease-out);
+}
+.light-transition .button:active {
+  transform: scale(0.97);
+}
+.light-transition :focus-visible {
+  outline: 2px solid var(--light-accent);
+  outline-offset: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .light-transition .button:active {
+    transform: none;
+  }
+}
+@media (max-width: 600px) {
+  .light-group {
+    padding: 12px;
+  }
+  .light-step-fields {
+    grid-template-columns: 1fr;
+  }
 }
 * {
   box-sizing: border-box;

@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { LightTransition } from "./light-transition";
 
 export type Game = {
   id: string;
@@ -12,6 +13,7 @@ export type Area = {
   name: string;
   kind: string;
   onComplete?: (
+    | LightTransition
     | { type: "control"; controlId: string; on?: boolean }
     | { type: "speech"; entity: string; message: string }
   )[];

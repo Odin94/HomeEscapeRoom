@@ -17,7 +17,7 @@ after(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 test("dynamic speech requires GM access and sends only to an available notification target", async () => {
-  for (const action of ["speech-targets", "speak"]) {
+  for (const action of ["speech-targets", "speak", "light-targets"]) {
     assert.equal((await call({ action })).status, 401);
   }
   const previous = settings();
@@ -60,6 +60,10 @@ test("dynamic speech requires GM access and sends only to an available notificat
       await call({ action: "speech-targets" }, gm)
     ).json();
     assert.equal(discovered.targets.length, 2);
+    const lights = await (await call({ action: "light-targets" }, gm)).json();
+    assert.deepEqual(lights.targets, [
+      { entity: "light.study", name: "light.study", available: true },
+    ]);
     assert.equal(
       discovered.targets.find(
         (t: { entity: string }) => t.entity === "notify.study_announce",

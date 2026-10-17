@@ -13,7 +13,8 @@ import { openStore } from "./store.server";
 import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
 import { settings, saveSettings } from "./settings.server";
 import { lanOrigin } from "./network.server";
-import { speechTargets, speak } from "./speech.server";
+import { speechTargets, speak, lightTargets, ha } from "./speech.server";
+import { lightTransitionSchema, runLightTransition } from "./light-transition";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
 db.update(actionRuns)
@@ -128,6 +129,15 @@ async function runActions(id: string) {
     try {
       const action = JSON.parse(run.payload);
       if (action.type === "speech") await speak(action);
+      else if (action.type === "lights")
+        await runLightTransition(
+          lightTransitionSchema.parse(action),
+          async (domain, service, data) => {
+            await ha(`services/${domain}/${service}`, data);
+          },
+          (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          () => session(id).status === "running",
+        );
       else {
         const control = definition(id).controls.find(
           (c) => c.id === action.controlId,
@@ -475,6 +485,8 @@ export async function handle(request: Request) {
     if (action === "speech-targets") {
       return reply({ targets: await speechTargets() });
     }
+    if (action === "light-targets")
+      return reply({ targets: await lightTargets() });
     if (action === "speak") {
       const s = session(String(body.id || ""));
       const target = await speak(body);

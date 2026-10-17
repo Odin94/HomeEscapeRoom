@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
+import { LightTransitionEditor } from "./light-transition-editor";
 const kinds = {
   external: "Alexa / external answer",
   text: "Enter text",
@@ -12,7 +13,7 @@ const kinds = {
   symbols: "Select symbols in order",
   qr: "Scan QR code",
 };
-function RemoveButton({
+export function RemoveButton({
   label,
   configured,
   disabled,
@@ -97,18 +98,19 @@ export function GameEditor({
   busy: boolean;
   save: (game: Game) => Promise<boolean>;
 }) {
-  const [draft] = useState(() => (isNew ? readGameDraft() : null));
+  const draftKey = isNew ? gameDraftKey : `${gameDraftKey}:${initial.id}`;
+  const [draft] = useState(() => readGameDraft(draftKey));
   const [game, setGame] = useState(draft?.game ?? initial);
   const [autoId, setAutoId] = useState(draft?.autoId ?? isNew);
-  const [saved, setSaved] = useState(false);
+  const savedGame = useRef<Game | null>(null);
   useEffect(() => {
-    if (!isNew || saved) return;
+    if (game === savedGame.current) return;
     try {
-      localStorage.setItem(gameDraftKey, JSON.stringify({ game, autoId }));
+      localStorage.setItem(draftKey, JSON.stringify({ game, autoId }));
     } catch {
       // Editing still works when browser storage is unavailable or full.
     }
-  }, [game, autoId, isNew, saved]);
+  }, [game, autoId, draftKey]);
   const patch = (index: number, value: Partial<Area>) =>
     setGame({
       ...game,
@@ -126,10 +128,10 @@ export function GameEditor({
       onSubmit={(e) => {
         e.preventDefault();
         void save(game).then((success) => {
-          if (!success || !isNew) return;
-          setSaved(true);
+          if (!success) return;
+          savedGame.current = game;
           try {
-            localStorage.removeItem(gameDraftKey);
+            localStorage.removeItem(draftKey);
           } catch {
             // A successful server save does not depend on browser storage.
           }
@@ -342,23 +344,27 @@ export function GameEditor({
             <fieldset>
               <legend>When solved</legend>
               <p>
-                Actions run in order. Add controls below first; a scene can set
-                all four lights.
+                Actions run in order. Light groups within a transition run
+                together.
               </p>
               {(a.onComplete || []).map((action, n) => (
                 <div className="editor-item" key={n}>
                   <div className="editor-item-header">
                     <span id={`action-${i}-${n}-label`}>
-                      {action.type === "control"
-                        ? "Home Assistant control"
-                        : "Speaker entity"}
+                      {action.type === "lights"
+                        ? "Light transition"
+                        : action.type === "control"
+                          ? "Home Assistant control"
+                          : "Speaker entity"}
                     </span>
                     <RemoveButton
                       label="Remove action"
                       configured={
-                        action.type === "control"
-                          ? !!action.controlId || action.on === false
-                          : !!action.entity || !!action.message
+                        action.type === "lights"
+                          ? true
+                          : action.type === "control"
+                            ? !!action.controlId || action.on === false
+                            : !!action.entity || !!action.message
                       }
                       remove={() =>
                         patch(i, {
@@ -367,7 +373,19 @@ export function GameEditor({
                       }
                     />
                   </div>
-                  {action.type === "control" ? (
+                  {action.type === "lights" ? (
+                    <LightTransitionEditor
+                      value={action}
+                      controls={game.controls}
+                      onChange={(value) =>
+                        patch(i, {
+                          onComplete: a.onComplete!.map((v, k) =>
+                            k === n ? value : v,
+                          ),
+                        })
+                      }
+                    />
+                  ) : action.type === "control" ? (
                     <>
                       <label>
                         <select
@@ -450,6 +468,37 @@ export function GameEditor({
                 </div>
               ))}
               <div className="actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={(a.onComplete?.length || 0) >= 10}
+                  title="Up to 10 actions per challenge"
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: [
+                        ...(a.onComplete || []),
+                        {
+                          type: "lights",
+                          groups: [
+                            {
+                              entities: [],
+                              steps: [
+                                {
+                                  mode: "color",
+                                  color: "#ffbb66",
+                                  brightness: 80,
+                                  seconds: 2,
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    })
+                  }
+                >
+                  Add light transition
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

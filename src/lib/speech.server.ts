@@ -10,7 +10,7 @@ const speechSchema = z.object({
   entity: z.string().regex(/^notify\.[a-z0-9_]+$/),
   message: z.string().trim().min(1).max(1000),
 });
-async function ha(path: string, body?: unknown) {
+export async function ha(path: string, body?: unknown) {
   const config = settings();
   if (!config.haUrl || !config.haToken)
     throw new Error(
@@ -37,6 +37,19 @@ async function ha(path: string, body?: unknown) {
       `Home Assistant returned ${response.status}. Check your token and speaker.`,
     );
   return response;
+}
+export async function lightTargets() {
+  const response = await ha("states");
+  return z
+    .array(entitySchema)
+    .parse(await response.json())
+    .filter((e) => /^(light|scene)\./.test(e.entity_id))
+    .map((e) => ({
+      entity: e.entity_id,
+      name: e.attributes.friendly_name || e.entity_id,
+      available: e.state !== "unavailable",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 export async function speechTargets() {
   const response = await ha("states");

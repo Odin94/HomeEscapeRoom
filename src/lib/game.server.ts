@@ -7,7 +7,9 @@ import {
   renameSync,
 } from "node:fs";
 import { resolve, join } from "node:path";
+import { lightTransitionSchema } from "./light-transition";
 export const actionSchema = z.discriminatedUnion("type", [
+  lightTransitionSchema,
   z.strictObject({
     type: z.literal("control"),
     controlId: z.string().min(1),
