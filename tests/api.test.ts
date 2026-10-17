@@ -155,6 +155,25 @@ test("authenticated game lifecycle persists shared, isolated progression", async
     401,
   );
 });
+test("ending revokes returning players even when the session is reopened", async () => {
+  const login = await call({ action: "login", key: "test-key" });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const { id } = await (
+    await call({ action: "create", name: "End test" }, gm)
+  ).json();
+  const joined = await call({ action: "join", id, name: "Ada" });
+  assert.match(joined.headers.get("set-cookie")!, /Max-Age=31536000/);
+  const player = joined.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await (await call(undefined, player)).json()).player.name,
+    "Ada",
+  );
+  await call({ action: "status", id, status: "closed" }, gm);
+  assert.equal((await (await call(undefined, player)).json()).player, null);
+  await call({ action: "status", id, status: "open" }, gm);
+  assert.equal((await (await call(undefined, player)).json()).player, null);
+});
+
 test("changing games revokes the previous player credential", async () => {
   const a = await call({
     action: "join",
@@ -275,4 +294,32 @@ test("game snapshots isolate sessions and settings remain private", async () => 
   assert.equal(adminState.settings.tokenConfigured, true);
   assert.equal(JSON.stringify(adminState).includes("private-token"), false);
   assert.equal(JSON.stringify(adminState).includes("new-admin-key"), false);
+  for (const publicUrl of [
+    "javascript:alert(1)",
+    "http://example.com/path",
+    "http://user:pass@example.com",
+  ]) {
+    assert.equal(
+      (await call({ action: "save-settings", haUrl: "", publicUrl }, gm))
+        .status,
+      400,
+    );
+  }
+  assert.equal(
+    (
+      await call(
+        {
+          action: "save-settings",
+          haUrl: "",
+          publicUrl: "http://threshold.home.arpa:3000/",
+        },
+        gm,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await (await call(undefined, gm)).json()).shareOrigin,
+    "http://threshold.home.arpa:3000",
+  );
 });

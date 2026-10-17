@@ -46,3 +46,22 @@ pnpm start
 ```
 
 Keep `games/` and `drizzle/` beside the built app, run from the project root and preserve `data/`. Migrations apply automatically on startup. Schema: `src/lib/schema.server.ts`; generate changes with `pnpm db:generate` and commit SQL/snapshots. `pnpm db:migrate` applies without launching the app. Back up data before migration. Legacy schema drift stops migration rather than discarding data.
+
+## Returning players and permanent QR markers
+
+Player identity uses an HttpOnly cookie lasting up to one year; shared progress remains in SQLite. A typed Zustand store caches the player view in localStorage under `threshold-player`. Reopening checks membership and progress with the server before showing gameplay. Local data cannot unlock areas. Use the same browser and origin; clearing cookies, private browsing or changing hostnames loses that browser identity.
+
+Connected pages poll every three seconds and refresh on window focus. End revokes the session's player credentials and clears local snapshots on the next successful refresh. Closed browsers reconcile when reopened. Joining another session replaces the previous snapshot. Reopening an ended session does not restore revoked memberships.
+
+For permanent printouts, set **Settings → Public game URL**, e.g. `http://threshold.home.arpa:3000`. All join links and room QR codes use this origin even when admin uses localhost. Blank restores LAN IP detection. Optional `PUBLIC_URL` supplies the default. This setting generates links; it does not configure DNS.
+
+1. Reserve the MacBook's Wi-Fi IP in your router's DHCP settings.
+2. Add a local DNS record `threshold.home.arpa` pointing to that reserved MacBook IP.
+3. If your router lacks local DNS, run AdGuard Home or Dnsmasq on the Home Assistant machine. Reserve its IP too and configure the router's DHCP DNS server to use it. The game hostname must point to the **MacBook**, where Threshold runs.
+4. Test the exact public URL and QR codes on phones before printing. Keep the hostname, port and game unlock codes stable; preserve server data.
+
+Being powered on 24/7 does not guarantee a fixed DHCP address. Home Assistant needs a configured DNS service; its web address does not automatically proxy Threshold. The Mac must remain awake with Threshold running. Phones must use the LAN DNS; custom DNS and VPNs can bypass it.
+
+A simpler alternative is the Mac's local hostname, e.g. `http://threshold-mac.local:3000` (System Settings → General → Sharing → Local hostname). Test on all phones before printing because multicast DNS depends on the network. Existing QR codes containing numeric IPs cannot be changed through DNS: retain their original IP/port or reprint once. Marker codes work across sessions as long as the game's unlock codes stay unchanged.
+
+References: [Apple local hostnames](https://support.apple.com/en-is/guide/mac-help/mchlp2322/mac), [Home Assistant LAN DNS setup](https://companion.home-assistant.io/docs/troubleshooting/networking/), [Home Assistant Dnsmasq](https://github.com/home-assistant/addons/blob/master/dnsmasq/DOCS.md).

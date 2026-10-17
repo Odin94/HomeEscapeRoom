@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
+import { usePlayerStore } from "../lib/player-store";
 type Game = {
   id: string;
   name: string;
@@ -32,7 +33,7 @@ type State = {
   sessions: Session[];
   games?: Game[];
   areas: Area[];
-  settings?: { haUrl: string; tokenConfigured: boolean };
+  settings?: { haUrl: string; tokenConfigured: boolean; publicUrl: string };
   player: { name: string; session_id: string; session: Session } | null;
   events?: { id: number; message: string; created: string }[];
 };
@@ -65,17 +66,33 @@ export function App() {
   const [code, setCode] = useState("");
   const refresh = useCallback(async () => {
     try {
-      setState(await api());
+      const next: State = await api();
+      usePlayerStore
+        .getState()
+        .sync(
+          next.player && !next.admin
+            ? { player: next.player, areas: next.areas }
+            : null,
+        );
+      setState(next);
     } catch (e) {
       setFailed(true);
       setToast((e as Error).message);
     }
   }, []);
   useEffect(() => {
+    void usePlayerStore.persist.rehydrate();
     void refresh();
     const timer = setInterval(refresh, 3000);
+    const resume = () => {
+      void refresh();
+    };
+    window.addEventListener("focus", resume);
     setCode(new URLSearchParams(location.search).get("code") || "");
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", resume);
+    };
   }, [refresh]);
   useEffect(() => {
     setJoinQr("");
@@ -442,9 +459,23 @@ export function App() {
                 <section className="panel settings">
                   <h2>Server connection</h2>
                   <form
-                    key={state.settings?.haUrl}
+                    key={`${state.settings?.haUrl}:${state.settings?.publicUrl}`}
                     onSubmit={(e) => submit(e, "save-settings")}
                   >
+                    <label>
+                      Public game URL (for printed QR codes)
+                      <input
+                        name="publicUrl"
+                        type="url"
+                        defaultValue={state.settings?.publicUrl}
+                        placeholder="http://threshold.home.arpa:3000"
+                      />
+                    </label>
+                    <p>
+                      Use a stable hostname that phones on your Wi-Fi can reach.
+                      Leave blank to detect a LAN IP automatically. Current
+                      link: {state.shareOrigin || "unavailable"}
+                    </p>
                     <label>
                       Home Assistant URL
                       <input

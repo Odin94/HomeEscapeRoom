@@ -67,11 +67,14 @@ function admin(request: Request) {
     .get();
 }
 function player(request: Request) {
-  return db
+  const found = db
     .select({ name: players.name, session_id: players.session_id })
     .from(players)
     .where(eq(players.token, cookie(request, "player")))
     .get();
+  return found && session(found.session_id).status !== "closed"
+    ? found
+    : undefined;
 }
 function secret(a: string, b: string) {
   const x = Buffer.from(a),
@@ -151,8 +154,9 @@ export async function handle(request: Request) {
         ...(isAdmin
           ? {
               games,
-              shareOrigin: lanOrigin(request.url),
+              shareOrigin: settings().publicUrl || lanOrigin(request.url),
               settings: {
+                publicUrl: settings().publicUrl,
                 haUrl: settings().haUrl,
                 tokenConfigured: !!settings().haToken,
               },
@@ -213,7 +217,7 @@ export async function handle(request: Request) {
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },
-        `player=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`,
+        `player=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000`,
       );
     }
     if (action === "leave") {
@@ -298,6 +302,9 @@ export async function handle(request: Request) {
         .set({ status: body.status })
         .where(eq(sessions.id, body.id))
         .run();
+      if (body.status === "closed") {
+        db.delete(players).where(eq(players.session_id, body.id)).run();
+      }
       event(body.id, `Session ${body.status}`);
       return reply({ ok: true });
     }
