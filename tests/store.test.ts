@@ -6,6 +6,79 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "../src/lib/store.server";
 import { sessions } from "../src/lib/schema.server";
+import { gameSchema, loadGames } from "../src/lib/game.server";
+
+test("retired password challenges migrate in saved snapshots without losing session data", () => {
+  const directory = mkdtempSync(
+    join(tmpdir(), "threshold-challenge-migration-"),
+  );
+  const path = join(directory, "game.sqlite");
+  const game = loadGames().find((game) => game.id === "signal-house")!;
+  const retired = structuredClone(game);
+  // Simulate data saved before the password type was removed.
+  const definition = JSON.stringify(retired).replace(
+    '"kind":"text"',
+    '"kind":"password"',
+  );
+  try {
+    const db = openStore(path);
+    db.$client.exec(
+      "DELETE FROM __drizzle_migrations WHERE id = (SELECT max(id) FROM __drizzle_migrations)",
+    );
+    db.$client
+      .prepare(
+        "INSERT INTO sessions(id,name,status,progress) VALUES ('room','In progress','paused',2)",
+      )
+      .run();
+    db.$client
+      .prepare(
+        "INSERT INTO session_games(session_id,definition) VALUES ('room',?)",
+      )
+      .run(definition);
+    db.$client
+      .prepare(
+        "INSERT INTO players(token,name,session_id) VALUES ('player','Ada','room')",
+      )
+      .run();
+    db.$client.close();
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const migrated = openStore(path);
+      try {
+        const saved = migrated.$client
+          .prepare(
+            "SELECT definition FROM session_games WHERE session_id='room'",
+          )
+          .get()!;
+        assert.deepEqual(
+          gameSchema.parse(JSON.parse(saved.definition as string)),
+          game,
+        );
+        assert.equal(migrated.select().from(sessions).get()!.progress, 2);
+        assert.equal(migrated.select().from(sessions).get()!.status, "paused");
+        assert.equal(
+          migrated.$client
+            .prepare("SELECT count(*) AS count FROM players")
+            .get()!.count,
+          1,
+        );
+        assert.deepEqual(
+          migrated.$client.prepare("PRAGMA foreign_key_check").all(),
+          [],
+        );
+        assert.equal(
+          migrated.$client.prepare("PRAGMA integrity_check").get()!
+            .integrity_check,
+          "ok",
+        );
+      } finally {
+        migrated.$client.close();
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("adopting an existing raw-SQL database preserves all rows and constraints", () => {
   const directory = mkdtempSync(join(tmpdir(), "threshold-legacy-"));
@@ -45,7 +118,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         db.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        3,
+        4,
       );
     } finally {
       db.$client.close();
@@ -57,7 +130,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         reopened.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        3,
+        4,
       );
     } finally {
       reopened.$client.close();
