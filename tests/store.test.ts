@@ -45,7 +45,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         db.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        2,
+        3,
       );
     } finally {
       db.$client.close();
@@ -57,7 +57,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         reopened.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        2,
+        3,
       );
     } finally {
       reopened.$client.close();

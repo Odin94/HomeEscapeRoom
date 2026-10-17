@@ -1,6 +1,8 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
+  actionRuns,
+  sessionAutomation,
   admins,
   events,
   players,
@@ -14,6 +16,14 @@ import { lanOrigin } from "./network.server";
 import { speechTargets, speak } from "./speech.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
+db.update(actionRuns)
+  .set({
+    status: "failed",
+    error:
+      "Server restarted during this action. Check device state before retrying; speech may repeat.",
+  })
+  .where(eq(actionRuns.status, "running"))
+  .run();
 export function closeStore() {
   db.$client.close();
 }
@@ -95,6 +105,148 @@ const reply = (data: unknown, setCookie?: string) =>
   new Response(JSON.stringify(data), {
     headers: { ...headers, ...(setCookie ? { "set-cookie": setCookie } : {}) },
   });
+function pending(id: string) {
+  return db
+    .select()
+    .from(actionRuns)
+    .where(
+      and(eq(actionRuns.session_id, id), sql`${actionRuns.status} != 'done'`),
+    )
+    .orderBy(actionRuns.id)
+    .all();
+}
+async function runActions(id: string) {
+  for (const run of pending(id)) {
+    if (session(id).status !== "running") break;
+    if (run.status !== "pending") break;
+    const claimed = db
+      .update(actionRuns)
+      .set({ status: "running", error: null })
+      .where(and(eq(actionRuns.id, run.id), eq(actionRuns.status, "pending")))
+      .run();
+    if (!claimed.changes) break;
+    try {
+      const action = JSON.parse(run.payload);
+      if (action.type === "speech") await speak(action);
+      else {
+        const control = definition(id).controls.find(
+          (c) => c.id === action.controlId,
+        )!;
+        const domain = control.entity.split(".")[0];
+        const config = settings();
+        if (!config.haUrl || !config.haToken)
+          throw new Error(
+            "Configure Home Assistant before running completion actions.",
+          );
+        const result = await fetch(
+          `${config.haUrl.replace(/\/$/, "")}/api/services/${domain}/${domain === "light" && action.on === false ? "turn_off" : "turn_on"}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.haToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ entity_id: control.entity }),
+            signal: AbortSignal.timeout(8000),
+          },
+        );
+        if (!result.ok)
+          throw new Error(`Home Assistant returned ${result.status}.`);
+      }
+      db.update(actionRuns)
+        .set({ status: "done" })
+        .where(eq(actionRuns.id, run.id))
+        .run();
+      event(id, "Completion action succeeded");
+    } catch (error) {
+      db.update(actionRuns)
+        .set({
+          status: "failed",
+          error: error instanceof Error ? error.message : "Action failed",
+        })
+        .where(eq(actionRuns.id, run.id))
+        .run();
+      event(id, "Completion action failed; game master retry required");
+      break;
+    }
+  }
+}
+async function complete(
+  id: string,
+  code: string,
+  external: boolean,
+  challenge?: string,
+) {
+  const s = session(id),
+    game = definition(id),
+    area = game.areas[s.progress];
+  if (s.status !== "running")
+    throw new Error("Your game master needs to start or resume the game.");
+  if (pending(id).length)
+    throw new Error(
+      "Waiting for room actions. Ask the game master to check automation.",
+    );
+  if (
+    !area ||
+    (area.kind === "external") !== external ||
+    ((external || challenge !== undefined) && area.id !== challenge)
+  )
+    throw new Error("This challenge is not accepting that answer source.");
+  const progress = nextUnlock(s.progress, code, game);
+  db.transaction((tx) => {
+    const updated = tx
+      .update(sessions)
+      .set({ progress })
+      .where(and(eq(sessions.id, id), eq(sessions.progress, s.progress)))
+      .run();
+    if (!updated.changes)
+      throw new Error("This challenge has already been completed.");
+    for (const [index, action] of (area.onComplete || []).entries())
+      tx.insert(actionRuns)
+        .values({
+          id: `${id}:${s.progress}:${index}`,
+          session_id: id,
+          payload: JSON.stringify(action),
+        })
+        .run();
+    tx.insert(events)
+      .values({ session_id: id, message: `Unlocked ${area.name}` })
+      .run();
+  });
+  await runActions(id);
+}
+export async function handleCallback(request: Request) {
+  try {
+    if (request.method !== "POST")
+      return new Response("Method not allowed", { status: 405 });
+    const body = await request.json();
+    const credentials = db
+      .select()
+      .from(sessionAutomation)
+      .where(eq(sessionAutomation.session_id, String(body.sessionId || "")))
+      .get();
+    if (
+      !credentials ||
+      !secret(
+        request.headers.get("authorization") || "",
+        `Bearer ${credentials.token}`,
+      )
+    )
+      return new Response("Unauthorized", { status: 401 });
+    await complete(
+      credentials.session_id,
+      String(body.answer || ""),
+      true,
+      String(body.challengeId || ""),
+    );
+    return reply({ ok: true });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Callback failed" },
+      { status: 400 },
+    );
+  }
+}
 export async function handle(request: Request) {
   try {
     const isAdmin = admin(request),
@@ -104,6 +256,7 @@ export async function handle(request: Request) {
       const active = p ? definition(p.session_id) : games[0];
       const areas = active?.areas || [];
       return reply({
+        automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,
         demo: !settings().haUrl,
         adminConfigured: !!settings().adminKey,
@@ -154,15 +307,35 @@ export async function handle(request: Request) {
               ? undefined
               : or(
                   eq(sessions.status, "open"),
+                  eq(sessions.status, "running"),
                   eq(sessions.id, p?.session_id || ""),
                 ),
           )
           .orderBy(desc(sessions.created))
           .limit(100)
-          .all(),
+          .all()
+          .map((s) => ({
+            ...s,
+            acceptingPlayers:
+              s.status === "open" ||
+              (s.status === "running" && !!definition(s.id).autoStart),
+          }))
+          .filter(
+            (s) => isAdmin || s.acceptingPlayers || s.id === p?.session_id,
+          ),
         player: p ? { ...p, session: session(p.session_id) } : null,
         ...(isAdmin
           ? {
+              automation: db
+                .select({
+                  id: actionRuns.id,
+                  session_id: actionRuns.session_id,
+                  status: actionRuns.status,
+                  error: actionRuns.error,
+                })
+                .from(actionRuns)
+                .where(sql`${actionRuns.status} != 'done'`)
+                .all(),
               games,
               shareOrigin: settings().publicUrl || lanOrigin(request.url),
               settings: {
@@ -217,13 +390,21 @@ export async function handle(request: Request) {
       if (!name || name.length > 40)
         throw new Error("Enter a name between 1 and 40 characters.");
       const s = session(body.id);
-      if (s.status !== "open")
+      if (
+        s.status !== "open" &&
+        !(s.status === "running" && definition(s.id).autoStart)
+      )
         throw new Error("This game is not accepting players.");
       const token = randomUUID();
       db.insert(players).values({ token, name, session_id: s.id }).run();
       db.delete(players)
         .where(eq(players.token, cookie(request, "player")))
         .run();
+      if (s.status === "open" && definition(s.id).autoStart)
+        db.update(sessions)
+          .set({ status: "running" })
+          .where(eq(sessions.id, s.id))
+          .run();
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },
@@ -241,21 +422,11 @@ export async function handle(request: Request) {
     }
     if (action === "unlock") {
       if (!p) throw new Error("Join a game first.");
-      const s = session(p.session_id);
-      if (s.status !== "running")
-        throw new Error("Your game master needs to start or resume the game.");
-      const progress = nextUnlock(
-        s.progress,
+      await complete(
+        p.session_id,
         String(body.code || ""),
-        definition(s.id),
-      );
-      db.update(sessions)
-        .set({ progress })
-        .where(and(eq(sessions.id, s.id), eq(sessions.progress, s.progress)))
-        .run();
-      event(
-        s.id,
-        `${p.name} unlocked ${definition(s.id).areas[progress - 1].name}`,
+        false,
+        body.challengeId,
       );
       return reply({ ok: true });
     }
@@ -264,6 +435,43 @@ export async function handle(request: Request) {
         JSON.stringify({ error: "Game master access required." }),
         { status: 401, headers },
       );
+    if (action === "callback-config") {
+      const id = String(body.id);
+      session(id);
+      db.insert(sessionAutomation)
+        .values({ session_id: id, token: randomUUID() + randomUUID() })
+        .onConflictDoNothing()
+        .run();
+      return reply({
+        ...db
+          .select()
+          .from(sessionAutomation)
+          .where(eq(sessionAutomation.session_id, id))
+          .get(),
+        challenges: definition(id)
+          .areas.filter((a) => a.kind === "external")
+          .map((a) => ({ id: a.id, name: a.name, answer: a.unlockCode })),
+        url: `${settings().publicUrl || lanOrigin(request.url) || new URL(request.url).origin}/api/callback`,
+      });
+    }
+    if (action === "retry-actions") {
+      const id = String(body.id);
+      const s = session(id);
+      if (s.status !== "running")
+        throw new Error("Resume this session before retrying.");
+      if (pending(id).some((r) => r.status === "running"))
+        throw new Error(
+          "An action is running or was interrupted. Wait for completion; interrupted actions become retryable after a server restart.",
+        );
+      db.update(actionRuns)
+        .set({ status: "pending", error: null })
+        .where(
+          and(eq(actionRuns.session_id, id), eq(actionRuns.status, "failed")),
+        )
+        .run();
+      await runActions(id);
+      return reply({ ok: true });
+    }
     if (action === "speech-targets") {
       return reply({ targets: await speechTargets() });
     }
@@ -328,14 +536,10 @@ export async function handle(request: Request) {
       return reply({ ok: true });
     }
     if (action === "advance") {
-      const s = session(body.id);
-      if (s.progress >= definition(s.id).areas.length)
-        throw new Error("All areas are unlocked.");
-      db.update(sessions)
-        .set({ progress: sql`${sessions.progress} + 1` })
-        .where(eq(sessions.id, s.id))
-        .run();
-      event(s.id, "Game master unlocked the next area");
+      const s = session(body.id),
+        area = definition(s.id).areas[s.progress];
+      if (!area) throw new Error("All areas are unlocked.");
+      await complete(s.id, area.unlockCode, area.kind === "external", area.id);
       return reply({ ok: true });
     }
     if (action === "device") {

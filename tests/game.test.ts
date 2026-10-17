@@ -104,3 +104,18 @@ test("game saves round-trip through readable JSON files", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("completion actions reject dangling controls and arbitrary services", () => {
+  for (const onComplete of [
+    [{ type: "control", controlId: "missing" }],
+    [{ type: "speech", entity: "light.test", message: "hi" }],
+    [{ type: "speech", entity: "notify.study_speak", message: " " }],
+    [{ type: "service", domain: "shell_command", service: "run" }],
+  ])
+    assert.equal(
+      gameSchema.safeParse(
+        makeGame({ kind: "text", unlockCode: "answer", onComplete }),
+      ).success,
+      false,
+    );
+});

@@ -15,6 +15,7 @@ import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as PlayRouteImport } from './routes/play'
 import { Route as SecretadminRouteImport } from './routes/secretadmin'
 import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as ApiCallbackRouteImport } from './routes/api.callback'
 import { Route as ApiGameRouteImport } from './routes/api.game'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const SessionsRoute = SessionsRouteImport.update({
   path: '/sessions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCallbackRoute = ApiCallbackRouteImport.update({
+  id: '/api/callback',
+  path: '/api/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGameRoute = ApiGameRouteImport.update({
   id: '/api/game',
   path: '/api/game',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/play': typeof PlayRoute
   '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
+  '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/play': typeof PlayRoute
   '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
+  '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/play': typeof PlayRoute
   '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
+  '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/play'
     | '/secretadmin'
     | '/sessions'
+    | '/api/callback'
     | '/api/game'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/play'
     | '/secretadmin'
     | '/sessions'
+    | '/api/callback'
     | '/api/game'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/play'
     | '/secretadmin'
     | '/sessions'
+    | '/api/callback'
     | '/api/game'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   PlayRoute: typeof PlayRoute
   SecretadminRoute: typeof SecretadminRoute
   SessionsRoute: typeof SessionsRoute
+  ApiCallbackRoute: typeof ApiCallbackRoute
   ApiGameRoute: typeof ApiGameRoute
 }
 
@@ -165,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/callback': {
+      id: '/api/callback'
+      path: '/api/callback'
+      fullPath: '/api/callback'
+      preLoaderRoute: typeof ApiCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/game': {
       id: '/api/game'
       path: '/api/game'
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlayRoute: PlayRoute,
   SecretadminRoute: SecretadminRoute,
   SessionsRoute: SessionsRoute,
+  ApiCallbackRoute: ApiCallbackRoute,
   ApiGameRoute: ApiGameRoute,
 }
 export const routeTree = rootRouteImport

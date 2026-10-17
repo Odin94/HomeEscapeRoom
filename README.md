@@ -125,3 +125,62 @@ ID replaces that definition. Sessions retain their original snapshots.
 - QR challenges use an exact, case-sensitive token. `qrMode: "prompted"` offers a camera/photo input in the app, decoded locally; players can also open the printed link with their phone camera. `qrMode: "hidden"` shows no scanner or hint: players discover and scan the physical marker externally, then confirm Unlock. Omitted QR mode retains legacy hidden behavior. Generate printable markers with **Show QR** in admin.
 - Hints are limited to 1,000 characters, revealed story text to 10,000, and answers to 256. Hidden QR challenges cannot have hints. Answers never appear in player API responses.
 - Up to 50 Home Assistant controls may be configured, with unique slug IDs and `light.*`, `scene.*`, or `script.*` entity IDs.
+
+## Automated QR → lights → colors → Alexa game
+
+Open **Games → The Color Riddle → Edit definition** for a ready-to-configure example.
+Set the scene control to your real Home Assistant scene and the speech entity to
+an available Alexa Devices `notify.*_speak` or `notify.*_announce` entity. Create a
+Home Assistant scene that turns on all four lamps: red, blue, green, yellow from
+left to right (or change the answer and choices to match your scene).
+
+The game creator now supports:
+
+- **Start on first join and allow joining while running**: a session-specific join QR asks only for a name. Other games retain the host-controlled start.
+- **When solved** actions on every challenge: activate a named scene/script/light control or speak a message on an Alexa notification entity. Actions execute in list order, up to ten per challenge. Use scripts for more complex lighting sequences.
+- **Alexa / external answer** challenges: phones display a waiting state; only an authenticated integration callback or GM override can solve them. Answers ignore case and surrounding whitespace.
+- **Story revealed after solving**: use this for the success message after the voice answer. Every connected phone sees shared progress on its next refresh.
+
+Save the definition, create a **new session**, then share its QR under Sessions.
+Existing sessions keep their original game snapshots. Scan the physical marker
+from **Games → Show QR** to generate its printable URL. Room markers now submit
+automatically when the session is running; QR photo decoding in the app also
+submits without an extra Unlock tap. A wrong scan reports an error; scan again
+to retry. Hidden QR challenges still do not display a scanner or hint.
+
+### Wire Alexa's answer back to the session
+
+Alexa Devices provides speech output; it does not automatically deliver spoken
+answers to this app. Set up the return path once per session:
+
+1. Under **Sessions → Automation / Alexa callback → Show callback configuration**, choose the external challenge. This shows its exact callback URL, bearer token, JSON body and a Home Assistant YAML example for that session snapshot.
+2. Merge the YAML example into Home Assistant (do not overwrite existing sections). It defines a toggle helper, an authenticated REST command and an automation which resets the helper and submits the answer. Set the callback URL to an address reachable **from Home Assistant**, using Settings → Public game URL if necessary.
+3. Expose `input_boolean.threshold_answer` through your Home Assistant Alexa Smart Home connection (Home Assistant Cloud or your configured Smart Home skill). Discover it in Alexa. This inbound connection is separate from the Alexa Devices speech integration.
+4. In the Alexa app create a routine with the voice phrase **the answer is five**, and a Smart Home action that turns the Threshold answer helper **on**. Players say **Alexa, the answer is five**. Alexa availability and phrase handling depend on your account/language; rehearse on the actual Echo. This fixed-answer routine sends the configured answer; it is not general speech transcription.
+5. For another answer or simultaneous session, use another routine/helper/REST command, with the matching session token, challenge ID and answer. Never route one voice phrase to multiple active teams sharing the same speaker.
+
+The callback is `POST /api/callback`, authenticated by `Authorization: Bearer <session-token>`;
+its body contains `sessionId`, `challengeId`, and `answer`. It deliberately accepts
+server-to-server requests without the browser Origin requirement. Tokens are
+random, session scoped, stable across restarts and shown only to authenticated
+GMs. Keep them private. Closed/paused sessions, wrong stages, wrong answers,
+wrong tokens and replayed completion callbacks cannot advance play. Phone answer
+submission cannot bypass an external challenge.
+
+Progress and pending actions are persisted together. Concurrent player scans
+cannot run the same stage action twice. If Home Assistant fails, the challenge
+remains solved, but new answers wait until the GM uses **Retry failed actions**.
+Completed actions are not repeated. A server restart marks interrupted actions
+as failed for explicit recovery. Check the device first: a timeout/crash can
+occur after Home Assistant accepted a request, so retrying speech may repeat it.
+Resume a paused session before retrying actions. Automatic actions require a
+real connection and fail visibly when it is absent; they do not silently simulate
+physical effects. A successful request confirms acceptance, not light/audio
+verification.
+
+Before inviting players, rehearse with two phones: name-only joining, the clue,
+QR scene activation, the ordered colors, audible riddle, voice routine and success
+message. Also pause the session and confirm the voice routine cannot advance it.
+No game actions or integration credentials are included in player responses.
+
+References: [Alexa Smart Home integration and supported helpers](https://www.home-assistant.io/integrations/alexa.smart_home/), [toggle helpers](https://www.home-assistant.io/integrations/input_boolean/), [Alexa Devices speech](https://www.home-assistant.io/integrations/alexa_devices/).

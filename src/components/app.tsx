@@ -32,7 +32,8 @@ export function App() {
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState("");
   const [qr, setQr] = useState("");
-  const [joinQr, setJoinQr] = useState("");
+  const [joinQr, setJoinQr] = useState<Record<string, string>>({});
+  const [joinSession, setJoinSession] = useState("");
   const [code, setCode] = useState("");
   const refresh = useCallback(async () => {
     try {
@@ -56,6 +57,7 @@ export function App() {
       void refresh();
     };
     window.addEventListener("focus", resume);
+    setJoinSession(new URLSearchParams(location.search).get("session") || "");
     setCode(new URLSearchParams(location.search).get("code") || "");
     return () => {
       clearInterval(timer);
@@ -63,24 +65,31 @@ export function App() {
     };
   }, [refresh]);
   useEffect(() => {
-    setJoinQr("");
+    setJoinQr({});
     setQr("");
     if (!state?.admin || !state.shareOrigin) return;
     let cancelled = false;
-    void QRCode.toDataURL(`${state.shareOrigin}/`, { width: 160, margin: 4 })
-      .then((url) => {
-        if (!cancelled) setJoinQr(url);
-      })
-      .catch(() => {
-        if (!cancelled) {
+    for (const session of state.sessions)
+      void QRCode.toDataURL(
+        `${state.shareOrigin}/?session=${encodeURIComponent(session.id)}`,
+        { width: 160, margin: 4 },
+      )
+        .then((url) => {
+          if (!cancelled)
+            setJoinQr((previous) => ({ ...previous, [session.id]: url }));
+        })
+        .catch(() => {
           setFailed(true);
           setToast("Could not generate join QR code");
-        }
-      });
+        });
     return () => {
       cancelled = true;
     };
-  }, [state?.admin, state?.shareOrigin]);
+  }, [
+    state?.admin,
+    state?.shareOrigin,
+    state?.sessions.map((s) => s.id).join(","),
+  ]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 5000);
@@ -103,6 +112,29 @@ export function App() {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (
+      !state?.player ||
+      state.player.session.status !== "running" ||
+      state.automationPending ||
+      !code ||
+      busy
+    )
+      return;
+    const area = state.areas[state.player.session.progress];
+    if (!area || !["qr", "hidden"].includes(area.kind)) return;
+    const token = code;
+    setCode("");
+    history.replaceState(null, "", "/");
+    void act({ action: "unlock", code: token, challengeId: area.id });
+  }, [
+    code,
+    busy,
+    state?.player?.session_id,
+    state?.player?.session.status,
+    state?.player?.session.progress,
+    state?.automationPending,
+  ]);
   function submit(e: FormEvent<HTMLFormElement>, action: string) {
     e.preventDefault();
     void act(
@@ -237,13 +269,25 @@ export function App() {
                           </Button>
                         </div>
                         <SessionControls id={s.id} act={act} busy={busy} />
+                        <SessionAutomation
+                          id={s.id}
+                          runs={
+                            state.automation?.filter(
+                              (r) => r.session_id === s.id,
+                            ) || []
+                          }
+                          act={act}
+                          busy={busy}
+                        />
                         <div className="join-link">
                           <Button
                             variant="ghost"
                             disabled={!state.shareOrigin}
                             onClick={() => {
                               void navigator.clipboard
-                                .writeText(`${state.shareOrigin}/`)
+                                .writeText(
+                                  `${state.shareOrigin}/?session=${encodeURIComponent(s.id)}`,
+                                )
                                 .then(() => {
                                   setFailed(false);
                                   setToast("Join link copied");
@@ -256,9 +300,9 @@ export function App() {
                           >
                             Copy join link
                           </Button>
-                          {joinQr && (
+                          {joinQr[s.id] && (
                             <img
-                              src={joinQr}
+                              src={joinQr[s.id]}
                               width={160}
                               height={160}
                               alt="Scan to open the join page"
@@ -494,27 +538,52 @@ export function App() {
                   autoComplete="given-name"
                 />
               </label>
-              <label>
-                Session
-                <select name="id" required defaultValue="">
-                  <option value="" disabled>
-                    Select a session
-                  </option>
-                  {state.sessions
-                    .filter((s) => s.status === "open")
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              {!state.sessions.some((s) => s.status === "open") && (
+              {joinSession ? (
+                <>
+                  <input type="hidden" name="id" value={joinSession} />
+                  <p>
+                    Joining{" "}
+                    {state.sessions.find((s) => s.id === joinSession)?.name ||
+                      "the linked session"}
+                  </p>
+                </>
+              ) : (
+                <label>
+                  Session
+                  <select name="id" required defaultValue="">
+                    <option value="" disabled>
+                      Select a session
+                    </option>
+                    {state.sessions
+                      .filter((s) => s.acceptingPlayers)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {joinSession &&
+                !state.sessions.some(
+                  (s) => s.id === joinSession && s.acceptingPlayers,
+                ) && (
+                  <p role="status">
+                    The linked session is not accepting players. Ask your game
+                    master to open joining.
+                  </p>
+                )}
+              {!state.sessions.some((s) => s.acceptingPlayers) && (
                 <p>No sessions are open.</p>
               )}
               <Button
                 disabled={
-                  busy || !state.sessions.some((s) => s.status === "open")
+                  busy ||
+                  !state.sessions.some(
+                    (s) =>
+                      s.acceptingPlayers &&
+                      (!joinSession || s.id === joinSession),
+                  )
                 }
               >
                 Join
@@ -541,12 +610,26 @@ export function App() {
                   <p>{a.description}</p>
                 </section>
               ))}
+            {state.automationPending && (
+              <p role="status">
+                Waiting for room actions. Ask your game master to check
+                Automation if nothing happens.
+              </p>
+            )}
+            {state.player.session.progress === state.areas.length &&
+              !state.automationPending && (
+                <p role="status">All challenges solved!</p>
+              )}
             {state.player.session.progress < state.areas.length && (
               <form
                 className="unlock"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void act({ action: "unlock", code }).then((ok) => {
+                  void act({
+                    action: "unlock",
+                    code,
+                    challengeId: state.areas[state.player!.session.progress].id,
+                  }).then((ok) => {
                     if (ok) {
                       setCode("");
                       history.replaceState(null, "", "/");
@@ -562,7 +645,11 @@ export function App() {
                   area={state.areas[state.player.session.progress]}
                   code={code}
                   setCode={setCode}
-                  disabled={busy || state.player.session.status !== "running"}
+                  disabled={
+                    busy ||
+                    !!state.automationPending ||
+                    state.player.session.status !== "running"
+                  }
                 />
               </form>
             )}
@@ -777,5 +864,143 @@ function Announcements({
         </>
       )}
     </form>
+  );
+}
+
+function SessionAutomation({
+  id,
+  runs,
+  act,
+  busy,
+}: {
+  id: string;
+  runs: NonNullable<State["automation"]>;
+  act: (body: Record<string, unknown>, message?: string) => Promise<boolean>;
+  busy: boolean;
+}) {
+  const [config, setConfig] = useState<{
+    url: string;
+    token: string;
+    challenges: { id: string; name: string; answer: string }[];
+  }>();
+  const [error, setError] = useState("");
+  const [challengeId, setChallengeId] = useState("");
+  const challenge =
+    config?.challenges.find((a) => a.id === challengeId) ||
+    config?.challenges[0];
+  return (
+    <details>
+      <summary>Automation / Alexa callback</summary>
+      <p>
+        Failed actions block further answers. Check the device before retrying:
+        a timed-out announcement may already have played.
+      </p>
+      {runs.map((r) => (
+        <p key={r.id} role="status">
+          {r.status}: {r.error || "Waiting for action completion"}
+        </p>
+      ))}
+      {runs.length > 0 && (
+        <Button
+          disabled={busy || runs.some((r) => r.status === "running")}
+          onClick={() => void act({ action: "retry-actions", id })}
+        >
+          Retry failed actions
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        onClick={() => {
+          void api({ action: "callback-config", id })
+            .then(setConfig)
+            .catch((e) => setError(e.message));
+        }}
+      >
+        Show callback configuration
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {config && (
+        <>
+          <p>
+            Keep this bearer token private. POST JSON from Home Assistant to:
+          </p>
+          <code>{config.url}</code>
+          <p>Authorization: Bearer {config.token}</p>
+          <label>
+            External challenge
+            <select
+              value={challenge?.id || ""}
+              onChange={(e) => setChallengeId(e.target.value)}
+            >
+              {config.challenges.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!challenge && (
+            <p>
+              This session has no external-answer challenges. Edit the game and
+              create a new session.
+            </p>
+          )}
+          <pre>
+            {JSON.stringify(
+              {
+                sessionId: id,
+                challengeId: challenge?.id,
+                answer: challenge?.answer,
+              },
+              null,
+              2,
+            )}
+          </pre>
+          {challenge && (
+            <details>
+              <summary>Home Assistant YAML example</summary>
+              <p>
+                Merge this into your Home Assistant configuration,
+                restart/reload the affected integrations, and expose the helper
+                to Alexa. Create a voice routine whose action turns this helper
+                on. Use a separate helper/command for each simultaneous session.
+              </p>
+              <pre
+                style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+              >{`input_boolean:
+  threshold_answer:
+    name: Threshold answer
+rest_command:
+  threshold_answer:
+    url: ${JSON.stringify(config.url)}
+    method: POST
+    headers:
+      authorization: ${JSON.stringify(`Bearer ${config.token}`)}
+    content_type: "application/json"
+    payload: '${JSON.stringify({ sessionId: id, challengeId: challenge.id, answer: challenge.answer }).replace(/'/g, "''")}'
+automation:
+  - alias: Threshold spoken answer
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.threshold_answer
+        from: "off"
+        to: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.threshold_answer
+      - action: rest_command.threshold_answer
+    mode: single`}</pre>
+            </details>
+          )}
+          <p>
+            Configure an Alexa routine or skill to trigger a Home Assistant
+            automation that sends this request. Use the challenge ID in this
+            session’s game snapshot. Paused sessions and other stages reject the
+            request.
+          </p>
+        </>
+      )}
+    </details>
   );
 }

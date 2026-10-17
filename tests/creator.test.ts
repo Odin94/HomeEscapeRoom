@@ -21,6 +21,9 @@ test("creator offers every configured type and retains device authoring", () => 
     "Select colors in order",
     "Select symbols in order",
     "Scan QR code",
+    "Alexa / external answer",
+    "Add scene / script / light action",
+    "Add Alexa speech",
     "Add control",
     "Add challenge",
     "Save game",
@@ -88,4 +91,24 @@ test("portable decoder reads the actual generated marker format", () => {
       pixels[index + 3] = 255;
     }
   assert.equal(decode(pixels, size, size)?.data, url);
+});
+
+test("external answers show a waiting state without a phone answer field", () => {
+  const html = renderToStaticMarkup(
+    createElement(ChallengeInput, {
+      area: {
+        id: "voice",
+        name: "Voice",
+        kind: "external",
+        hint: "",
+        description: "",
+      },
+      code: "",
+      setCode: () => {},
+      disabled: false,
+    }),
+  );
+  assert.ok(html.includes("Waiting for your answer"));
+  assert.ok(!html.includes("<input"));
+  assert.ok(!html.includes("Unlock"));
 });

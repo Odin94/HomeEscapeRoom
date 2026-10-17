@@ -35,3 +35,19 @@ export const sessionGames = sqliteTable("session_games", {
     .references(() => sessions.id),
   definition: text("definition").notNull(),
 });
+
+export const sessionAutomation = sqliteTable("session_automation", {
+  session_id: text("session_id")
+    .primaryKey()
+    .references(() => sessions.id),
+  token: text("token").notNull(),
+});
+export const actionRuns = sqliteTable("action_runs", {
+  id: text("id").primaryKey(),
+  session_id: text("session_id")
+    .notNull()
+    .references(() => sessions.id),
+  payload: text("payload").notNull(),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+});

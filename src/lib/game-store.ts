@@ -4,12 +4,17 @@ export type Game = {
   id: string;
   name: string;
   areas: Area[];
+  autoStart?: boolean;
   controls: { id: string; name: string; entity: string }[];
 };
 export type Area = {
   id: string;
   name: string;
   kind: string;
+  onComplete?: (
+    | { type: "control"; controlId: string; on?: boolean }
+    | { type: "speech"; entity: string; message: string }
+  )[];
   qrMode?: "prompted" | "hidden";
   choices?: string[];
   hint: string;
@@ -23,6 +28,7 @@ type Session = {
   status: string;
   progress: number;
   players?: number;
+  acceptingPlayers?: boolean;
 };
 export type State = {
   admin: boolean;
@@ -34,6 +40,13 @@ export type State = {
   areas: Area[];
   settings?: { haUrl: string; tokenConfigured: boolean; publicUrl: string };
   player: { name: string; session_id: string; session: Session } | null;
+  automationPending?: boolean;
+  automation?: {
+    id: string;
+    session_id: string;
+    status: string;
+    error: string | null;
+  }[];
   events?: { id: number; message: string; created: string }[];
 };
 

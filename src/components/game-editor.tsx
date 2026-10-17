@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Area, Game } from "../lib/game-store";
 import { Button } from "./ui";
 const kinds = {
+  external: "Alexa / external answer",
   text: "Enter text",
   numbers: "Enter numbers",
   colors: "Select colors in order",
@@ -49,6 +50,14 @@ export function GameEditor({
           value={game.name}
           onChange={(e) => setGame({ ...game, name: e.target.value })}
         />
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={game.autoStart || false}
+          onChange={(e) => setGame({ ...game, autoStart: e.target.checked })}
+        />{" "}
+        Start on first join and allow joining while running
       </label>
       <p>
         1–30 challenges, played in order. IDs must be unique lowercase slugs.
@@ -165,6 +174,146 @@ export function GameEditor({
               onChange={(e) => patch(i, { unlockCode: e.target.value })}
             />
           </label>
+          <fieldset>
+            <legend>When solved</legend>
+            <p>
+              Actions run in order. Add controls below first; a scene can set
+              all four lights.
+            </p>
+            {(a.onComplete || []).map((action, n) => (
+              <div key={n}>
+                {action.type === "control" ? (
+                  <>
+                    <label>
+                      Home Assistant control
+                      <select
+                        required
+                        value={action.controlId}
+                        onChange={(e) =>
+                          patch(i, {
+                            onComplete: a.onComplete!.map((v, k) =>
+                              k === n
+                                ? { ...action, controlId: e.target.value }
+                                : v,
+                            ),
+                          })
+                        }
+                      >
+                        <option value="">Choose control</option>
+                        {game.controls.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={action.on !== false}
+                        onChange={(e) =>
+                          patch(i, {
+                            onComplete: a.onComplete!.map((v, k) =>
+                              k === n ? { ...action, on: e.target.checked } : v,
+                            ),
+                          })
+                        }
+                      />{" "}
+                      Turn on (off applies only to lights)
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      Speaker entity
+                      <input
+                        required
+                        placeholder="notify.living_room_speak"
+                        value={action.entity}
+                        onChange={(e) =>
+                          patch(i, {
+                            onComplete: a.onComplete!.map((v, k) =>
+                              k === n
+                                ? { ...action, entity: e.target.value }
+                                : v,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Spoken riddle
+                      <textarea
+                        required
+                        maxLength={1000}
+                        value={action.message}
+                        onChange={(e) =>
+                          patch(i, {
+                            onComplete: a.onComplete!.map((v, k) =>
+                              k === n
+                                ? { ...action, message: e.target.value }
+                                : v,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: a.onComplete!.filter((_, k) => k !== n),
+                    })
+                  }
+                >
+                  Remove action
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={(a.onComplete?.length || 0) >= 10}
+              onClick={() =>
+                patch(i, {
+                  onComplete: [
+                    ...(a.onComplete || []),
+                    {
+                      type: "control",
+                      controlId: game.controls[0]?.id || "",
+                      on: true,
+                    },
+                  ],
+                })
+              }
+            >
+              Add scene / script / light action
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={(a.onComplete?.length || 0) >= 10}
+              onClick={() =>
+                patch(i, {
+                  onComplete: [
+                    ...(a.onComplete || []),
+                    { type: "speech", entity: "", message: "" },
+                  ],
+                })
+              }
+            >
+              Add Alexa speech
+            </Button>
+          </fieldset>
+          {a.kind === "external" && (
+            <p>
+              Use this challenge ID and correct answer in the authenticated
+              callback under the session Automation section.
+            </p>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -291,6 +440,8 @@ export function ChallengeInput({
   const hidden =
     area.kind === "hidden" ||
     (area.kind === "qr" && area.qrMode !== "prompted");
+  if (area.kind === "external")
+    return <p role="status">Waiting for your answer through Alexa…</p>;
   if (hidden && !code) return null;
   return (
     <>

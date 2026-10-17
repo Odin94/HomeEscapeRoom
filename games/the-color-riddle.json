@@ -1,0 +1,54 @@
+{
+  "id": "the-color-riddle",
+  "name": "The Color Riddle",
+  "autoStart": true,
+  "areas": [
+    {
+      "id": "find-the-lights",
+      "name": "The hidden signal",
+      "kind": "qr",
+      "qrMode": "prompted",
+      "hint": "Find the QR marker beneath the lamp. Scan it to wake the four lights.",
+      "description": "The lights reveal a secret. Read their colors from left to right.",
+      "unlockCode": "color-riddle-lights-9b37",
+      "onComplete": [
+        {
+          "type": "control",
+          "controlId": "puzzle-scene",
+          "on": true
+        }
+      ]
+    },
+    {
+      "id": "light-colors",
+      "name": "The colorful code",
+      "kind": "colors",
+      "hint": "Enter the four light colors, from left to right.",
+      "description": "Listen to Alexa, then say: Alexa, the answer is five!",
+      "choices": ["#ff0000", "#0000ff", "#00ff00", "#ffff00"],
+      "unlockCode": "#ff0000|#0000ff|#00ff00|#ffff00",
+      "onComplete": [
+        {
+          "type": "speech",
+          "entity": "notify.living_room_speak",
+          "message": "I am the number of fingers on one hand. What number am I? Say: Alexa, the answer is five."
+        }
+      ]
+    },
+    {
+      "id": "spoken-answer",
+      "name": "You solved the riddle!",
+      "kind": "external",
+      "hint": "Tell Alexa your answer to the riddle.",
+      "description": "Success! The lights and the voice have accepted your answers. You completed the game.",
+      "unlockCode": "five"
+    }
+  ],
+  "controls": [
+    {
+      "id": "puzzle-scene",
+      "name": "Four lights: red, blue, green, yellow",
+      "entity": "scene.escape_room_colors"
+    }
+  ]
+}
