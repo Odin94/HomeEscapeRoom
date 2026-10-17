@@ -49,17 +49,63 @@
   outline-offset: 0;
 }
 .light-step {
-  padding-block: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 12px;
+  padding-block: 10px;
   border-top: 1px solid #dce3d4;
+}
+.light-step > .editor-item-header {
+  display: contents;
+}
+.light-step > .editor-item-header > strong {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  padding-bottom: 10px;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.light-step > .editor-item-header > .actions {
+  grid-column: 3;
+  grid-row: 1;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+.game-editor .light-step .button {
+  min-height: 40px;
+  padding: 8px;
 }
 .light-step-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 12px;
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: minmax(170px, 2fr) repeat(3, minmax(90px, 1fr));
+  gap: 8px;
+}
+.light-step-fields label {
+  min-width: 0;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+}
+.light-step-fields:not(:has(input[type="color"])) {
+  grid-template-columns: minmax(170px, 2fr) minmax(90px, 1fr);
+}
+.light-step-fields input,
+.light-step-fields select {
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+.light-step > .entity-picker,
+.light-step > p {
+  grid-column: 2 / -1;
 }
 .light-step-fields input[type="color"] {
   width: 100%;
-  height: 48px;
+  height: 40px;
   padding: 4px;
   cursor: pointer;
 }
@@ -124,12 +170,27 @@
     transform: none;
   }
 }
+@media (max-width: 800px) {
+  .light-step {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .light-step > .editor-item-header > .actions {
+    grid-column: 2;
+  }
+  .light-step-fields,
+  .light-step-fields:not(:has(input[type="color"])) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .light-step > .entity-picker,
+  .light-step > p {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 600px) {
   .light-group {
     padding: 12px;
-  }
-  .light-step-fields {
-    grid-template-columns: 1fr;
   }
 }
 * {
