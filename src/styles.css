@@ -111,7 +111,7 @@ label {
   font-weight: 500;
   margin-bottom: 22px;
 }
-input,
+input:not([type="checkbox"]),
 select,
 textarea {
   display: block;
@@ -123,6 +123,20 @@ textarea {
   background: #fafbf8;
   color: inherit;
   min-height: 48px;
+}
+label:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: #2c5747;
+  cursor: pointer;
 }
 textarea {
   font-family: monospace;
