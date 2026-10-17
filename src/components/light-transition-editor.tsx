@@ -243,7 +243,8 @@ export function LightTransitionEditor({
                   <small>
                     {group.entities.length} lights · {group.steps.length} steps
                     · {group.steps.reduce((sum, step) => sum + step.seconds, 0)}{" "}
-                    seconds
+                    seconds per play
+                    {(group.repeat ?? 1) > 1 && ` � ${group.repeat} repeats`}
                   </small>
                 </span>
                 <RemoveButton
@@ -258,6 +259,37 @@ export function LightTransitionEditor({
                   }
                 />
               </summary>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={(group.repeat ?? 1) > 1}
+                  onChange={(e) =>
+                    groupPatch(i, { repeat: e.target.checked ? 2 : 1 })
+                  }
+                />{" "}
+                Loop this light group
+              </label>
+              {(group.repeat ?? 1) > 1 && (
+                <label>
+                  Total repeats (including the first play)
+                  <input
+                    required
+                    type="number"
+                    min={2}
+                    max={100}
+                    step={1}
+                    value={group.repeat}
+                    onChange={(e) =>
+                      groupPatch(i, { repeat: Number(e.target.value) })
+                    }
+                  />
+                  <small>
+                    This group repeats independently. The next action runs after
+                    all groups finish. Pausing or closing the game stops
+                    playback.
+                  </small>
+                </label>
+              )}
               <EntityPicker
                 domain="light"
                 targets={allTargets.filter(

@@ -121,3 +121,61 @@ test("failures stop subsequent steps and interruption prevents sending", async (
     /interrupted/,
   );
 });
+test("optional loops repeat individual groups and stop on interruption or failure", async () => {
+  const looping = {
+    ...action,
+    groups: action.groups.map((group, i) => ({
+      ...group,
+      repeat: i === 0 ? 3 : 1,
+    })),
+  };
+  const sent: unknown[][] = [];
+  await runLightTransition(
+    looping,
+    async (...args) => {
+      sent.push(args);
+    },
+    async () => {},
+  );
+  assert.equal(sent.length, 7);
+  assert.equal(sent.filter((call) => call[0] === "scene").length, 1);
+  assert.equal(sent.filter((call) => call[0] === "light").length, 6);
+  let active = true;
+  let calls = 0;
+  await assert.rejects(
+    runLightTransition(
+      looping,
+      async () => {
+        calls++;
+      },
+      async () => {
+        active = false;
+      },
+      () => active,
+    ),
+    /interrupted/,
+  );
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(
+    runLightTransition(
+      looping,
+      async () => {
+        calls++;
+        throw new Error("unavailable");
+      },
+      async () => {},
+    ),
+    /unavailable/,
+  );
+  assert.equal(calls, 2);
+  for (const repeat of [0, -1, 1.5, 101])
+    assert.equal(
+      lightTransitionSchema.safeParse({
+        ...action,
+        groups: [{ ...action.groups[0], repeat }],
+      }).success,
+      false,
+    );
+  assert.equal(lightTransitionSchema.parse(looping).groups[0].repeat, 3);
+});

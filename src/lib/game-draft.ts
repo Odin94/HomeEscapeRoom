@@ -32,6 +32,7 @@ const draftSchema = z.object({
                 type: z.literal("lights"),
                 groups: z.array(
                   z.object({
+                    repeat: z.number().optional(),
                     entities: z.array(z.string()),
                     steps: z.array(
                       z.union([

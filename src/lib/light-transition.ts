@@ -22,6 +22,7 @@ export const lightTransitionSchema = z.strictObject({
   groups: z
     .array(
       z.strictObject({
+        repeat: z.number().int().min(1).max(100).optional(),
         entities: z
           .array(z.string().regex(/^light\.[a-z0-9_]+$/))
           .min(1)
@@ -57,30 +58,36 @@ export async function runLightTransition(
   const results = await Promise.allSettled(
     action.groups.map(async (group) => {
       try {
-        for (const step of group.steps) {
-          if (failed || !active())
-            throw new Error(
-              "Light transition interrupted. Check lights before retrying.",
-            );
-          if (step.mode === "scene")
-            await send("scene", "turn_on", { entity_id: step.entity });
-          else
-            await send("light", step.mode === "off" ? "turn_off" : "turn_on", {
-              entity_id: group.entities,
-              ...(step.mode === "color"
-                ? {
-                    brightness_pct: step.brightness,
-                    rgb_color: [1, 3, 5].map((i) =>
-                      parseInt(step.color.slice(i, i + 2), 16),
-                    ),
-                  }
-                : {}),
-            });
-          await wait(step.seconds * 1000);
-          if (!active())
-            throw new Error(
-              "Light transition interrupted. Check lights before retrying.",
-            );
+        for (let cycle = 0; cycle < (group.repeat ?? 1); cycle++) {
+          for (const step of group.steps) {
+            if (failed || !active())
+              throw new Error(
+                "Light transition interrupted. Check lights before retrying.",
+              );
+            if (step.mode === "scene")
+              await send("scene", "turn_on", { entity_id: step.entity });
+            else
+              await send(
+                "light",
+                step.mode === "off" ? "turn_off" : "turn_on",
+                {
+                  entity_id: group.entities,
+                  ...(step.mode === "color"
+                    ? {
+                        brightness_pct: step.brightness,
+                        rgb_color: [1, 3, 5].map((i) =>
+                          parseInt(step.color.slice(i, i + 2), 16),
+                        ),
+                      }
+                    : {}),
+                },
+              );
+            await wait(step.seconds * 1000);
+            if (!active())
+              throw new Error(
+                "Light transition interrupted. Check lights before retrying.",
+              );
+          }
         }
       } catch (error) {
         failed = true;
