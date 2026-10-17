@@ -157,7 +157,7 @@ test("external answers show a waiting state without a phone answer field", () =>
       disabled: false,
     }),
   );
-  assert.ok(html.includes("Waiting for your answer"));
+  assert.ok(html.includes("Tell Alexa your answer using the phrase"));
   assert.ok(!html.includes("<input"));
   assert.ok(!html.includes("Unlock"));
 });

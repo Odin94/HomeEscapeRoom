@@ -161,6 +161,30 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
     )
   ).json();
   assert.equal((await call({ action: "callback-config", id })).status, 401);
+  for (const action of ["alexa-setup", "alexa-status", "alexa-test"]) {
+    assert.equal(
+      (await call({ action, id, challengeId: "spoken-answer" })).status,
+      401,
+    );
+    assert.equal(
+      (await call({ action, id, challengeId: "missing" }, gm)).status,
+      400,
+    );
+  }
+  assert.deepEqual(
+    await (
+      await call(
+        { action: "alexa-status", id, challengeId: "spoken-answer" },
+        gm,
+      )
+    ).json(),
+    { setup: null },
+  );
+  assert.equal(
+    (await call({ action: "alexa-test", id, challengeId: "spoken-answer" }, gm))
+      .status,
+    400,
+  );
   const config = await (
     await call({ action: "callback-config", id }, gm)
   ).json();

@@ -152,9 +152,21 @@ to retry. Hidden QR challenges do not display a scanner; an optional clue can he
 ### Wire Alexa's answer back to the session
 
 Alexa Devices provides speech output; it does not automatically deliver spoken
-answers to this app. Set up the return path once per session:
+answers to this app. The guided setup removes the YAML and callback configuration:
 
-1. Under **Sessions → Automation / Alexa callback → Show callback configuration**, choose the external challenge. This shows its exact callback URL, bearer token, JSON body and a Home Assistant YAML example for that session snapshot.
+1. Save the game and create a session. Under **Sessions → Automation / Alexa setup → Set up Alexa / external answers**, choose the external challenge and select **Set up Home Assistant**. Use an administrator Home Assistant token in Settings. The app creates a separate toggle helper for that session and challenge; retries reuse it.
+2. Connect Home Assistant to Alexa. **Home Assistant Cloud (Nabu Casa, a paid subscription)** provides an existing Alexa skill to enable, with no custom skill development. Alternatively, create and connect your own Alexa Smart Home skill and AWS Lambda function using the [manual integration instructions](https://www.home-assistant.io/integrations/alexa.smart_home/). The app requests Alexa exposure for Home Assistant Cloud; your own Smart Home skill needs the helper included in its exposure configuration. Ask Alexa to discover devices and find the helper shown in setup. This connection is separate from Alexa Devices speech output.
+3. Follow the displayed steps to create an Alexa routine: use the desired spoken phrase as its Voice trigger, and turn the displayed helper **on** as its Smart Home action. This one-time step happens in the Alexa app. Changing the phrase in our guide does not edit the Alexa routine.
+4. Select **Test Alexa routine without solving**, wait until the guide says to speak, then say the phrase. The app shows when it receives the signal. Test mode never solves a challenge, even during active play. Tests expire after 60 seconds.
+5. During play, the running game server checks helpers roughly every 1.5 seconds, resets them, and accepts signals only for the running session's current external challenge after pending actions finish. Signals from paused sessions, future/completed challenges, or left on during a server restart are discarded. Add a **When solved → Alexa speech** action in the game editor for spoken confirmation. Create a new session after changing a game's actions; existing sessions keep their snapshots.
+
+Bindings are stored alongside the SQLite database in `alexa-answers.json` and restored after restart. They are tied to the configured Home Assistant URL. Keep the game server running to receive answers. Each helper submits the saved answer; it does not transcribe speech or evaluate incorrect guesses. Use separate helpers and routines for simultaneous teams, and do not assign one phrase to multiple teams sharing an Echo.
+
+#### Advanced: manual callbacks
+
+The original callback integration remains available under **Advanced: manual integration callback**. Use it for custom skills or other integrations:
+
+1. Under **Sessions → Automation / Alexa setup → Set up Alexa / external answers**, choose the external challenge and expand **Advanced: manual integration callback**. This shows its exact callback URL, bearer token, JSON body and a Home Assistant YAML example for that session snapshot.
 2. Merge the YAML example into Home Assistant (do not overwrite existing sections). It defines a toggle helper, an authenticated REST command and an automation which resets the helper and submits the answer. Set the callback URL to an address reachable **from Home Assistant**, using Settings → Public game URL if necessary.
 3. Expose `input_boolean.threshold_answer` through your Home Assistant Alexa Smart Home connection (Home Assistant Cloud or your configured Smart Home skill). Discover it in Alexa. This inbound connection is separate from the Alexa Devices speech integration.
 4. In the Alexa app create a routine with the voice phrase **the answer is five**, and a Smart Home action that turns the Threshold answer helper **on**. Players say **Alexa, the answer is five**. Alexa availability and phrase handling depend on your account/language; rehearse on the actual Echo. This fixed-answer routine sends the configured answer; it is not general speech transcription.

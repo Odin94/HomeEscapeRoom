@@ -1,4 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { dirname, join } from "node:path";
+import { AlexaAnswers } from "./alexa-answers.server";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
   actionRuns,
@@ -30,6 +32,7 @@ db.update(actionRuns)
   .run();
 export function closeStore() {
   closing = true;
+  alexaAnswers.close();
   void lightLoops.close();
   db.$client.close();
 }
@@ -63,6 +66,30 @@ function definition(id: string) {
   if (!saved) throw new Error("Session game definition not found.");
   return gameSchema.parse(JSON.parse(saved.definition));
 }
+const alexaAnswers = new AlexaAnswers(
+  join(dirname(databasePath), "alexa-answers.json"),
+  ({ sessionId, challengeId }) => {
+    if (closing) return;
+    try {
+      const s = session(sessionId);
+      const area = definition(sessionId).areas[s.progress];
+      if (
+        s.status === "running" &&
+        area?.kind === "external" &&
+        area.id === challengeId &&
+        !pending(sessionId).length
+      )
+        return `${sessionId}:${s.progress}`;
+    } catch {
+      /* Removed sessions cannot receive answers. */
+    }
+  },
+  async ({ sessionId, challengeId }) => {
+    const area = definition(sessionId).areas.find((a) => a.id === challengeId)!;
+    await complete(sessionId, area.unlockCode, true, challengeId);
+  },
+);
+alexaAnswers.start();
 function event(id: string | null, message: string) {
   db.insert(events).values({ session_id: id, message }).run();
 }
@@ -532,6 +559,25 @@ export async function handle(request: Request) {
         JSON.stringify({ error: "Game master access required." }),
         { status: 401, headers },
       );
+    if (["alexa-setup", "alexa-test", "alexa-status"].includes(action)) {
+      const id = String(body.id || "");
+      const s = session(id);
+      const challengeId = String(body.challengeId || "");
+      const area = definition(id).areas.find(
+        (a) => a.id === challengeId && a.kind === "external",
+      );
+      if (!area)
+        throw new Error("Choose an external-answer challenge in this session.");
+      if (action === "alexa-status")
+        return reply({ setup: alexaAnswers.get(id, challengeId) });
+      if (s.status === "closed")
+        throw new Error("Choose an open session to set up or test Alexa.");
+      if (action === "alexa-test")
+        return reply({ setup: await alexaAnswers.test(id, challengeId) });
+      return reply({
+        setup: await alexaAnswers.setup(id, challengeId, s.name, area.name),
+      });
+    }
     if (action === "callback-config") {
       const id = String(body.id);
       session(id);

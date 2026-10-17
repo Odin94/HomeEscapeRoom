@@ -344,6 +344,17 @@ export function GameEditor({
                 ))}
               </select>
             </label>
+            {a.kind === "external" && (
+              <p>
+                Save this game and create a session, then open its Automation /
+                Alexa setup controls. The app creates the Home Assistant helper
+                for you and guides you through the Alexa routine. Alexa does not
+                listen for this answer automatically. Each accepted phrase needs
+                a routine; it submits the configured answer rather than checking
+                spoken words. Add a speech action under When solved for spoken
+                confirmation.
+              </p>
+            )}
             {a.kind === "qr" && (
               <label>
                 QR presentation
@@ -912,7 +923,11 @@ export function ChallengeInput({
     area.kind === "hidden" ||
     (area.kind === "qr" && area.qrMode !== "prompted");
   if (area.kind === "external")
-    return <p role="status">Waiting for your answer through Alexa…</p>;
+    return (
+      <p role="status">
+        Tell Alexa your answer using the phrase provided by your game master.
+      </p>
+    );
   if (hidden && !code) return null;
   return (
     <>

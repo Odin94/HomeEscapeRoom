@@ -1,4 +1,5 @@
 import { GameMarkdown } from "./game-markdown";
+import { AlexaSetup } from "./alexa-setup";
 import {
   useCallback,
   useEffect,
@@ -941,7 +942,7 @@ function SessionAutomation({
     config?.challenges[0];
   return (
     <details>
-      <summary>Automation / Alexa callback</summary>
+      <summary>Automation / Alexa setup</summary>
       <p>
         Failed actions block further answers. Check the device before retrying:
         a timed-out announcement may already have played.
@@ -972,17 +973,12 @@ function SessionAutomation({
               .catch((e) => setError(e.message));
           }}
         >
-          Show callback configuration
+          Set up Alexa / external answers
         </Button>
       </div>
       {error && <p role="alert">{error}</p>}
       {config && (
         <>
-          <p>
-            Keep this bearer token private. POST JSON from Home Assistant to:
-          </p>
-          <code>{config.url}</code>
-          <p>Authorization: Bearer {config.token}</p>
           <label>
             External challenge
             <select
@@ -1002,29 +998,46 @@ function SessionAutomation({
               create a new session.
             </p>
           )}
-          <pre>
-            {JSON.stringify(
-              {
-                sessionId: id,
-                challengeId: challenge?.id,
-                answer: challenge?.answer,
-              },
-              null,
-              2,
-            )}
-          </pre>
           {challenge && (
-            <details>
-              <summary>Home Assistant YAML example</summary>
-              <p>
-                Merge this into your Home Assistant configuration,
-                restart/reload the affected integrations, and expose the helper
-                to Alexa. Create a voice routine whose action turns this helper
-                on. Use a separate helper/command for each simultaneous session.
-              </p>
-              <pre
-                style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-              >{`input_boolean:
+            <AlexaSetup
+              key={`${id}:${challenge.id}`}
+              sessionId={id}
+              challengeId={challenge.id}
+              answer={challenge.answer}
+            />
+          )}
+          <details>
+            <summary>Advanced: manual integration callback</summary>
+            <p>
+              Keep this bearer token private. POST JSON from your integration
+              to:
+            </p>
+            <code>{config.url}</code>
+            <p>Authorization: Bearer {config.token}</p>
+            <pre>
+              {JSON.stringify(
+                {
+                  sessionId: id,
+                  challengeId: challenge?.id,
+                  answer: challenge?.answer,
+                },
+                null,
+                2,
+              )}
+            </pre>
+            {challenge && (
+              <details>
+                <summary>Home Assistant YAML example</summary>
+                <p>
+                  Merge this into your Home Assistant configuration,
+                  restart/reload the affected integrations, and expose the
+                  helper to Alexa. Create a voice routine whose action turns
+                  this helper on. Use a separate helper/command for each
+                  simultaneous session.
+                </p>
+                <pre
+                  style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+                >{`input_boolean:
   threshold_answer:
     name: Threshold answer
 rest_command:
@@ -1048,14 +1061,15 @@ automation:
           entity_id: input_boolean.threshold_answer
       - action: rest_command.threshold_answer
     mode: single`}</pre>
-            </details>
-          )}
-          <p>
-            Configure an Alexa routine or skill to trigger a Home Assistant
-            automation that sends this request. Use the challenge ID in this
-            session’s game snapshot. Paused sessions and other stages reject the
-            request.
-          </p>
+              </details>
+            )}
+            <p>
+              Configure an Alexa routine or skill to trigger a Home Assistant
+              automation that sends this request. Use the challenge ID in this
+              session’s game snapshot. Paused sessions and other stages reject
+              the request.
+            </p>
+          </details>
         </>
       )}
     </details>
