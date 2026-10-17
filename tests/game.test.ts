@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nextUnlock } from "../src/lib/game.server";
-test("team progresses through QR, password, QR in order", () => {
+test("team progresses through QR, text, QR in order", () => {
   assert.equal(nextUnlock(0, "study-marker-7c92"), 1);
   assert.equal(nextUnlock(1, " RAVEN "), 2);
   assert.equal(nextUnlock(2, "observatory-marker-a83f"), 3);
@@ -54,6 +54,7 @@ test("fixed challenge types validate and match according to their rules", () => 
 test("creation rejects unknown fields, invalid combinations and malformed sequences", () => {
   for (const area of [
     { kind: "arbitrary", unlockCode: "x" },
+    { kind: "password", unlockCode: "x" },
     { kind: "numbers", unlockCode: "4.2" },
     { kind: "text", unlockCode: "x", choices: ["a", "b"] },
     { kind: "text", unlockCode: "x", qrMode: "hidden" },

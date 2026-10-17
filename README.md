@@ -15,7 +15,7 @@ Open `/` on phones to enter a name and join an open session. Admin lives at `/se
 
 ## Games and sessions
 
-**Games** lets admins create or edit validated JSON definitions. Save writes `games/<id>.json`; commit these files to track room changes. The editor supports any number of areas (up to 30) and named light, scene or script controls (up to 50). Each area has an unlock code, narrative content, QR/password mode and a `playerView` reference. `narrative` is the currently implemented view; unknown references are rejected, and definitions cannot contain executable page code. Schemas live in `src/lib/game.server.ts`. Invalid files fail validation on load and invalid UI edits are rejected before writing.
+**Games** lets admins create or edit validated JSON definitions. Save writes `games/<id>.json`; commit these files to track room changes. The editor supports any number of areas (up to 30) and named light, scene or script controls (up to 50). Each area has an unlock code, narrative content, challenge type and a `playerView` reference. `narrative` is the currently implemented view; unknown references are rejected, and definitions cannot contain executable page code. Schemas live in `src/lib/game.server.ts`. Invalid files fail validation on load and invalid UI edits are rejected before writing.
 
 Entity mappings are game-specific, never read from HA_LIGHT_ENTITY, HA_SCENE_ENTITY or HA_VOICE_SCRIPT. These legacy wizard settings no longer affect play. Configure `controls[].entity` in the game definition instead. The old optional `setup:env` wizard remains available for connection bootstrap; prefer the UI for ongoing configuration.
 
@@ -119,7 +119,7 @@ ID replaces that definition. Sessions retain their original snapshots.
 `games/tutorial-challenges.json` demonstrates every supported challenge.
 
 - Games contain 1–30 challenges with unique lowercase slug IDs and names of 1–80 characters. Unknown fields and challenge types are rejected.
-- Text answers ignore case and surrounding whitespace. `password` remains a legacy alias for text.
+- Text answers ignore case and surrounding whitespace.
 - Number answers contain only digits and preserve leading zeroes.
 - Color and symbol challenges offer 2–12 unique choices and require an ordered answer of 2–20 choices separated by `|`. Repetitions are allowed. Choices cannot contain `|`; colors use six-digit hex values such as `#ff0000`.
 - QR challenges use an exact, case-sensitive token. `qrMode: "prompted"` offers a camera/photo input in the app, decoded locally; players can also open the printed link with their phone camera. `qrMode: "hidden"` shows no scanner or hint: players discover and scan the physical marker externally, then confirm Unlock. Omitted QR mode retains legacy hidden behavior. Generate printable markers with **Show QR** in admin.

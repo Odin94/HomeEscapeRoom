@@ -38,7 +38,6 @@ export const gameSchema = z
             name: z.string().trim().min(1).max(80),
             kind: z.enum([
               "qr",
-              "password",
               "text",
               "numbers",
               "colors",
@@ -169,10 +168,7 @@ export function nextUnlock(
   if (progress >= game.areas.length)
     throw new Error("Your team has already completed the game.");
   const area = game.areas[progress];
-  const text =
-    area.kind === "text" ||
-    area.kind === "password" ||
-    area.kind === "external";
+  const text = area.kind === "text" || area.kind === "external";
   if (
     (text ? code.trim().toLowerCase() : code.trim()) !==
     (text ? area.unlockCode.toLowerCase() : area.unlockCode)

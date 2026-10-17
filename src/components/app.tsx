@@ -369,7 +369,7 @@ export function App() {
                                   {
                                     id: "first",
                                     name: "First room",
-                                    kind: "password",
+                                    kind: "text",
                                     hint: "",
                                     description: "",
                                     unlockCode: "change-me",

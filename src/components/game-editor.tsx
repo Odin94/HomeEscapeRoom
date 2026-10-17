@@ -8,7 +8,6 @@ const kinds = {
   colors: "Select colors in order",
   symbols: "Select symbols in order",
   qr: "Scan QR code",
-  password: "Enter text (legacy)",
 };
 export function GameEditor({
   initial,

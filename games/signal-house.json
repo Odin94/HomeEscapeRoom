@@ -14,7 +14,7 @@
     {
       "id": "archive",
       "name": "The archive",
-      "kind": "password",
+      "kind": "text",
       "hint": "The keeper of the night. Five letters. A bird.",
       "description": "Among the old records, a final transmission reads: ‘Find the last marker where the house keeps its light.’",
       "unlockCode": "raven",

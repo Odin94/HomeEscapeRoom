@@ -305,7 +305,7 @@ test("game snapshots isolate sessions and settings remain private", async () => 
       {
         id: "one",
         name: "One",
-        kind: "password",
+        kind: "text",
         hint: "",
         description: "Original ending",
         unlockCode: "first-answer",
