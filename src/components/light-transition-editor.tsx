@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import type { LightStep, LightTransition } from "../lib/light-transition";
 import { Button } from "./ui";
 import { RemoveButton } from "./game-editor";
@@ -478,15 +479,17 @@ export function LightTransitionEditor({
               <Button
                 type="button"
                 variant="outline"
+                className="add-light-step"
+                aria-label="Add step"
                 disabled={group.steps.length >= 50}
-                title="Up to 50 steps per group"
+                title="Add step (up to 50 per group)"
                 onClick={() =>
                   groupPatch(i, {
                     steps: [...group.steps, { mode: "off", seconds: 2 }],
                   })
                 }
               >
-                Add step
+                <Plus size={20} aria-hidden="true" />
               </Button>
               <p>
                 {group.steps.reduce((sum, s) => sum + s.seconds, 0)} seconds

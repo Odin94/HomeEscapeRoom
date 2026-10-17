@@ -96,7 +96,7 @@
 .light-step-fields label:last-child {
   grid-column: 4;
 }
-.light-step-fields input,
+.light-step-fields input:not([type="checkbox"]),
 .light-step-fields select {
   min-height: 40px;
   height: 40px;
@@ -113,6 +113,13 @@
   height: 40px;
   padding: 4px;
   cursor: pointer;
+}
+.game-editor .add-light-step {
+  display: flex;
+  width: 40px;
+  min-height: 40px;
+  padding: 8px;
+  margin: 4px auto;
 }
 .entity-picker {
   background: white;
