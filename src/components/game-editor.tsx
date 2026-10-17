@@ -918,12 +918,8 @@ export function ChallengeInput({
     <>
       {area.kind === "qr" && !hidden ? (
         <>
-          <p>
-            Scan the room marker with your phone camera to open its link, or
-            scan a photo here.
-          </p>
           <label>
-            Scan QR image
+            <span className="sr-only">Scan QR image</span>
             <input
               type="file"
               accept="image/*"
@@ -983,7 +979,7 @@ export function ChallengeInput({
           <div
             className="challenge-choices"
             role="group"
-            aria-label="Choose in order; repeated choices allowed"
+            aria-label="Answer choices"
           >
             {area.choices?.map((choice) => (
               <Button
@@ -1053,7 +1049,9 @@ export function ChallengeInput({
         </>
       ) : area.kind !== "qr" && !hidden ? (
         <label>
-          {area.kind === "numbers" ? "Number code" : "Answer"}
+          <span className="sr-only">
+            {area.kind === "numbers" ? "Number code" : "Answer"}
+          </span>
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
