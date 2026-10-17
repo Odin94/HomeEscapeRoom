@@ -192,257 +192,282 @@ export function LightTransitionEditor({
     void refresh();
   }, [refresh]);
   return (
-    <div className="light-transition">
-      <div className="actions">
+    <details className="light-transition-disclosure" open>
+      <summary>
+        Edit transition
+        <small>
+          {value.groups.length} light groups ·{" "}
+          {value.groups.reduce((sum, group) => sum + group.entities.length, 0)}{" "}
+          lights
+        </small>
+      </summary>
+      <div className="light-transition">
+        <div className="actions">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            title={
+              loading
+                ? "Loading Home Assistant devices"
+                : "Read lights and scenes from Home Assistant"
+            }
+            onClick={() => void refresh()}
+          >
+            {loading ? "Loading devices…" : "Refresh lights & scenes"}
+          </Button>
+          <small>One sequence per group. All groups start together.</small>
+        </div>
+        {error && (
+          <p role="alert">
+            {error}{" "}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void refresh()}
+            >
+              Retry
+            </Button>
+          </p>
+        )}
+        {value.groups.map((group, i) => {
+          const stepPatch = (n: number, step: LightStep) =>
+            groupPatch(i, {
+              steps: group.steps.map((s, k) => (k === n ? step : s)),
+            });
+          return (
+            <details className="light-group" key={i} open>
+              <summary>
+                <span>
+                  Light group {i + 1}
+                  <small>
+                    {group.entities.length} lights · {group.steps.length} steps
+                    · {group.steps.reduce((sum, step) => sum + step.seconds, 0)}{" "}
+                    seconds
+                  </small>
+                </span>
+                <RemoveButton
+                  label="Delete light group"
+                  configured={group.entities.length > 0}
+                  disabled={value.groups.length === 1}
+                  remove={() =>
+                    onChange({
+                      ...value,
+                      groups: value.groups.filter((_, k) => k !== i),
+                    })
+                  }
+                />
+              </summary>
+              <EntityPicker
+                domain="light"
+                targets={allTargets.filter(
+                  (t) =>
+                    !value.groups.some(
+                      (g, k) => k !== i && g.entities.includes(t.entity),
+                    ),
+                )}
+                selected={group.entities}
+                change={(entities) => groupPatch(i, { entities })}
+              />
+              {!group.entities.length && <p>Select at least one light.</p>}
+              <div className="selected-lights">
+                {group.entities.map((entity) => (
+                  <Button
+                    key={entity}
+                    type="button"
+                    variant="ghost"
+                    aria-label={`Deselect ${entity}`}
+                    onClick={() =>
+                      groupPatch(i, {
+                        entities: group.entities.filter((v) => v !== entity),
+                      })
+                    }
+                  >
+                    {allTargets.find((t) => t.entity === entity)?.name ||
+                      entity}{" "}
+                    ×
+                  </Button>
+                ))}
+              </div>
+              {group.steps.map((step, n) => (
+                <div className="light-step" key={n}>
+                  <div className="editor-item-header">
+                    <strong>Step {n + 1}</strong>
+                    <div className="actions">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={n === 0}
+                        title={
+                          n === 0
+                            ? "Already the first step"
+                            : "Move step earlier"
+                        }
+                        onClick={() => {
+                          const steps = [...group.steps];
+                          [steps[n - 1], steps[n]] = [steps[n], steps[n - 1]];
+                          groupPatch(i, { steps });
+                        }}
+                      >
+                        ↑
+                      </Button>
+                      <RemoveButton
+                        label="Delete step"
+                        configured
+                        disabled={group.steps.length === 1}
+                        remove={() =>
+                          groupPatch(i, {
+                            steps: group.steps.filter((_, k) => k !== n),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="light-step-fields">
+                    <label>
+                      Look
+                      <select
+                        value={step.mode}
+                        onChange={(e) =>
+                          stepPatch(
+                            n,
+                            e.target.value === "off"
+                              ? { mode: "off", seconds: step.seconds }
+                              : e.target.value === "scene"
+                                ? {
+                                    mode: "scene",
+                                    entity: "",
+                                    seconds: step.seconds,
+                                  }
+                                : {
+                                    mode: "color",
+                                    color: "#ffbb66",
+                                    brightness: 80,
+                                    seconds: step.seconds,
+                                  },
+                          )
+                        }
+                      >
+                        <option value="color">Color & brightness</option>
+                        <option value="off">Off</option>
+                        <option value="scene">Home Assistant scene</option>
+                      </select>
+                    </label>
+                    {step.mode === "color" && (
+                      <>
+                        <label>
+                          Color
+                          <input
+                            type="color"
+                            value={step.color}
+                            onChange={(e) =>
+                              stepPatch(n, { ...step, color: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Brightness (%)
+                          <input
+                            required
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={step.brightness}
+                            onChange={(e) =>
+                              stepPatch(n, {
+                                ...step,
+                                brightness: Number(e.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
+                    <label>
+                      Duration (seconds)
+                      <input
+                        required
+                        type="number"
+                        min={0.1}
+                        max={3600}
+                        step={0.1}
+                        value={step.seconds}
+                        onChange={(e) =>
+                          stepPatch(n, {
+                            ...step,
+                            seconds: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  {step.mode === "scene" && (
+                    <>
+                      <EntityPicker
+                        domain="scene"
+                        targets={allTargets}
+                        selected={step.entity ? [step.entity] : []}
+                        change={(entities) =>
+                          stepPatch(n, { ...step, entity: entities[0] || "" })
+                        }
+                      />
+                      <p>
+                        {step.entity || "Choose a scene."} · A saved scene
+                        affects all devices configured in that Home Assistant
+                        scene.
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={group.steps.length >= 50}
+                title="Up to 50 steps per group"
+                onClick={() =>
+                  groupPatch(i, {
+                    steps: [...group.steps, { mode: "off", seconds: 2 }],
+                  })
+                }
+              >
+                Add step
+              </Button>
+              <p>
+                {group.steps.reduce((sum, s) => sum + s.seconds, 0)} seconds
+                total. The final look stays until another action changes it.
+              </p>
+            </details>
+          );
+        })}
         <Button
           type="button"
           variant="outline"
-          disabled={loading}
-          title={
-            loading
-              ? "Loading Home Assistant devices"
-              : "Read lights and scenes from Home Assistant"
+          disabled={value.groups.length >= 20}
+          title="Up to 20 light groups"
+          onClick={() =>
+            onChange({
+              ...value,
+              groups: [
+                ...value.groups,
+                {
+                  entities: [],
+                  steps: [
+                    {
+                      mode: "color",
+                      color: "#ffbb66",
+                      brightness: 80,
+                      seconds: 2,
+                    },
+                  ],
+                },
+              ],
+            })
           }
-          onClick={() => void refresh()}
         >
-          {loading ? "Loading devices…" : "Refresh lights & scenes"}
+          Add another light group
         </Button>
-        <small>One sequence per group. All groups start together.</small>
       </div>
-      {error && (
-        <p role="alert">
-          {error}{" "}
-          <Button type="button" variant="ghost" onClick={() => void refresh()}>
-            Retry
-          </Button>
-        </p>
-      )}
-      {value.groups.map((group, i) => {
-        const stepPatch = (n: number, step: LightStep) =>
-          groupPatch(i, {
-            steps: group.steps.map((s, k) => (k === n ? step : s)),
-          });
-        return (
-          <section className="light-group" key={i}>
-            <div className="editor-item-header">
-              <h3>Light group {i + 1}</h3>
-              <RemoveButton
-                label="Delete light group"
-                configured={group.entities.length > 0}
-                disabled={value.groups.length === 1}
-                remove={() =>
-                  onChange({
-                    ...value,
-                    groups: value.groups.filter((_, k) => k !== i),
-                  })
-                }
-              />
-            </div>
-            <EntityPicker
-              domain="light"
-              targets={allTargets.filter(
-                (t) =>
-                  !value.groups.some(
-                    (g, k) => k !== i && g.entities.includes(t.entity),
-                  ),
-              )}
-              selected={group.entities}
-              change={(entities) => groupPatch(i, { entities })}
-            />
-            {!group.entities.length && <p>Select at least one light.</p>}
-            <div className="selected-lights">
-              {group.entities.map((entity) => (
-                <Button
-                  key={entity}
-                  type="button"
-                  variant="ghost"
-                  aria-label={`Deselect ${entity}`}
-                  onClick={() =>
-                    groupPatch(i, {
-                      entities: group.entities.filter((v) => v !== entity),
-                    })
-                  }
-                >
-                  {allTargets.find((t) => t.entity === entity)?.name || entity}{" "}
-                  ×
-                </Button>
-              ))}
-            </div>
-            {group.steps.map((step, n) => (
-              <div className="light-step" key={n}>
-                <div className="editor-item-header">
-                  <strong>Step {n + 1}</strong>
-                  <div className="actions">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={n === 0}
-                      title={
-                        n === 0 ? "Already the first step" : "Move step earlier"
-                      }
-                      onClick={() => {
-                        const steps = [...group.steps];
-                        [steps[n - 1], steps[n]] = [steps[n], steps[n - 1]];
-                        groupPatch(i, { steps });
-                      }}
-                    >
-                      ↑
-                    </Button>
-                    <RemoveButton
-                      label="Delete step"
-                      configured
-                      disabled={group.steps.length === 1}
-                      remove={() =>
-                        groupPatch(i, {
-                          steps: group.steps.filter((_, k) => k !== n),
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="light-step-fields">
-                  <label>
-                    Look
-                    <select
-                      value={step.mode}
-                      onChange={(e) =>
-                        stepPatch(
-                          n,
-                          e.target.value === "off"
-                            ? { mode: "off", seconds: step.seconds }
-                            : e.target.value === "scene"
-                              ? {
-                                  mode: "scene",
-                                  entity: "",
-                                  seconds: step.seconds,
-                                }
-                              : {
-                                  mode: "color",
-                                  color: "#ffbb66",
-                                  brightness: 80,
-                                  seconds: step.seconds,
-                                },
-                        )
-                      }
-                    >
-                      <option value="color">Color & brightness</option>
-                      <option value="off">Off</option>
-                      <option value="scene">Home Assistant scene</option>
-                    </select>
-                  </label>
-                  {step.mode === "color" && (
-                    <>
-                      <label>
-                        Color
-                        <input
-                          type="color"
-                          value={step.color}
-                          onChange={(e) =>
-                            stepPatch(n, { ...step, color: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Brightness (%)
-                        <input
-                          required
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={step.brightness}
-                          onChange={(e) =>
-                            stepPatch(n, {
-                              ...step,
-                              brightness: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                    </>
-                  )}
-                  <label>
-                    Duration (seconds)
-                    <input
-                      required
-                      type="number"
-                      min={0.1}
-                      max={3600}
-                      step={0.1}
-                      value={step.seconds}
-                      onChange={(e) =>
-                        stepPatch(n, {
-                          ...step,
-                          seconds: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                </div>
-                {step.mode === "scene" && (
-                  <>
-                    <EntityPicker
-                      domain="scene"
-                      targets={allTargets}
-                      selected={step.entity ? [step.entity] : []}
-                      change={(entities) =>
-                        stepPatch(n, { ...step, entity: entities[0] || "" })
-                      }
-                    />
-                    <p>
-                      {step.entity || "Choose a scene."} · A saved scene affects
-                      all devices configured in that Home Assistant scene.
-                    </p>
-                  </>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={group.steps.length >= 50}
-              title="Up to 50 steps per group"
-              onClick={() =>
-                groupPatch(i, {
-                  steps: [...group.steps, { mode: "off", seconds: 2 }],
-                })
-              }
-            >
-              Add step
-            </Button>
-            <p>
-              {group.steps.reduce((sum, s) => sum + s.seconds, 0)} seconds
-              total. The final look stays until another action changes it.
-            </p>
-          </section>
-        );
-      })}
-      <Button
-        type="button"
-        variant="outline"
-        disabled={value.groups.length >= 20}
-        title="Up to 20 light groups"
-        onClick={() =>
-          onChange({
-            ...value,
-            groups: [
-              ...value.groups,
-              {
-                entities: [],
-                steps: [
-                  {
-                    mode: "color",
-                    color: "#ffbb66",
-                    brightness: 80,
-                    seconds: 2,
-                  },
-                ],
-              },
-            ],
-          })
-        }
-      >
-        Add another light group
-      </Button>
-    </div>
+    </details>
   );
 }

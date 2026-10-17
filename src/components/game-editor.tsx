@@ -120,10 +120,11 @@ export function GameEditor({
     <form
       className="game-editor"
       onInvalidCapture={(event) => {
-        const challenge = (event.target as HTMLElement).closest(
-          "details.challenge-editor",
-        );
-        if (challenge instanceof HTMLDetailsElement) challenge.open = true;
+        let ancestor = (event.target as HTMLElement).parentElement;
+        while (ancestor) {
+          if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+          ancestor = ancestor.parentElement;
+        }
       }}
       onSubmit={(e) => {
         e.preventDefault();
