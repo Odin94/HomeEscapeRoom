@@ -170,7 +170,7 @@ export function GameEditor({
 }: {
   initial: Game;
   isNew?: boolean;
-  shareOrigin?: string;
+  shareOrigin?: string | null;
   busy: boolean;
   save: (game: Game) => Promise<boolean>;
 }) {
@@ -552,7 +552,10 @@ export function GameEditor({
               </label>
             )}
             {a.kind === "qr" && (
-              <QrToken token={a.unlockCode || ""} origin={shareOrigin} />
+              <QrToken
+                token={a.unlockCode || ""}
+                origin={shareOrigin || undefined}
+              />
             )}
             {["text", "external"].includes(a.kind) && (
               <label>
