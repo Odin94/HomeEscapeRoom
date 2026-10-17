@@ -11,6 +11,7 @@ import { openStore } from "./store.server";
 import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
 import { settings, saveSettings } from "./settings.server";
 import { lanOrigin } from "./network.server";
+import { speechTargets, speak } from "./speech.server";
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
 export function closeStore() {
@@ -254,6 +255,15 @@ export async function handle(request: Request) {
         JSON.stringify({ error: "Game master access required." }),
         { status: 401, headers },
       );
+    if (action === "speech-targets") {
+      return reply({ targets: await speechTargets() });
+    }
+    if (action === "speak") {
+      const s = session(String(body.id || ""));
+      const target = await speak(body);
+      event(s.id, `Announcement sent to ${target.name}`);
+      return reply({ ok: true });
+    }
     if (action === "logout") {
       db.delete(admins)
         .where(eq(admins.token, cookie(request, "gm")))

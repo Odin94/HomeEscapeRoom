@@ -11,9 +11,100 @@ process.env.GAMES_PATH = join(directory, "games");
 cpSync("games", process.env.GAMES_PATH, { recursive: true });
 delete process.env.HA_URL;
 const { handle, closeStore } = await import("../src/lib/db.server");
+const { settings, saveSettings } = await import("../src/lib/settings.server");
 after(() => {
   closeStore();
   rmSync(directory, { recursive: true, force: true });
+});
+test("dynamic speech requires GM access and sends only to an available notification target", async () => {
+  for (const action of ["speech-targets", "speak"]) {
+    assert.equal((await call({ action })).status, 401);
+  }
+  const previous = settings();
+  const login = await call({ action: "login", key: previous.adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const originalFetch = globalThis.fetch;
+  const sent: { url: string; body: unknown }[] = [];
+  let fail = false;
+  try {
+    saveSettings({
+      ...previous,
+      haUrl: "http://ha.test",
+      haToken: "test-token",
+    });
+    globalThis.fetch = async (url, init) => {
+      assert.equal(
+        (init?.headers as Record<string, string>).Authorization,
+        "Bearer test-token",
+      );
+      if (fail) return new Response("", { status: 503 });
+      if (String(url).endsWith("/api/states"))
+        return Response.json([
+          {
+            entity_id: "notify.study_speak",
+            state: "unknown",
+            attributes: { friendly_name: "Study Speak" },
+          },
+          {
+            entity_id: "notify.study_announce",
+            state: "unavailable",
+            attributes: {},
+          },
+          { entity_id: "notify.mobile_app", state: "idle", attributes: {} },
+          { entity_id: "light.study", state: "on", attributes: {} },
+        ]);
+      sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+      return Response.json([]);
+    };
+    const discovered = await (
+      await call({ action: "speech-targets" }, gm)
+    ).json();
+    assert.equal(discovered.targets.length, 2);
+    assert.equal(
+      discovered.targets.find(
+        (t: { entity: string }) => t.entity === "notify.study_announce",
+      ).available,
+      false,
+    );
+    const base = {
+      action: "speak",
+      id: "signal-house",
+      entity: "notify.study_speak",
+      message: "Your next clue is abc",
+    };
+    for (const change of [
+      { message: " " },
+      { message: "x".repeat(1001) },
+      { entity: "light.study" },
+      { entity: "notify.mobile_app" },
+      { entity: "notify.study_announce" },
+      { id: "missing" },
+    ]) {
+      assert.equal((await call({ ...base, ...change }, gm)).status, 400);
+    }
+    assert.equal(sent.length, 0);
+    assert.equal(
+      (await call({ ...base, message: "  Watermelon & <clue>  " }, gm)).status,
+      200,
+    );
+    assert.deepEqual(sent, [
+      {
+        url: "http://ha.test/api/services/notify/send_message",
+        body: {
+          entity_id: "notify.study_speak",
+          message: "Watermelon &amp; &lt;clue&gt;",
+        },
+      },
+    ]);
+    fail = true;
+    const failure = await call(base, gm);
+    assert.equal(failure.status, 400);
+    assert.match((await failure.json()).error, /503/);
+    assert.equal(sent.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    saveSettings(previous);
+  }
 });
 const origin = "http://localhost:3000";
 async function call(

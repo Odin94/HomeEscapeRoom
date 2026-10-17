@@ -273,6 +273,20 @@ textarea {
   display: block;
   border-radius: 8px;
 }
+.announcements {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #d6d9d2);
+  display: grid;
+  gap: 12px;
+}
+.announcements h3,
+.announcements p {
+  margin: 0;
+}
+.announcements > .button {
+  justify-self: start;
+}
 .sr-only {
   position: absolute;
   width: 1px;

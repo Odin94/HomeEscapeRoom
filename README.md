@@ -33,6 +33,8 @@ Host the server on your LAN, allow Node through the firewall, disable sleep and 
 
 Home Assistant controls send server-side REST commands with an eight-second timeout. Light entities support on/off; scenes and scripts support turn_on. Add Hue and announcement integrations in Home Assistant first. Configured does not mean connectivity is verified; use a session control and check the result. Secrets and undiscovered content are withheld from unauthenticated API responses. Game JSON contains puzzle answers and belongs in an appropriately private repository.
 
+For dynamic Alexa speech, finish the **Alexa Devices** integration in Home Assistant and save its URL and long-lived access token in Threshold's **Settings**. Open a session's controls, select **Find speakers**, choose a Speak or Announce entity, type a message (up to 1,000 characters), and select **Say it**. No predefined Home Assistant script is needed. Speak reads the message; Announce adds a chime. Discovery lists notification entities whose IDs end in `_speak` or `_announce`; unavailable speakers cannot be selected. Refresh speakers after changing the connection or device setup. Announcements require a real Home Assistant connection and game master access; the success notification confirms Home Assistant accepted the request, not that audio playback was verified. The existing script-based announcement control remains available.
+
 ## Build and checks
 
 ```sh

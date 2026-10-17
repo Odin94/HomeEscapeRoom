@@ -629,50 +629,177 @@ function SessionControls({
       .catch(() => setControls([]));
   }, [id]);
   return (
-    <div className="controls">
-      {controls.map((c) => (
-        <div key={c.id}>
-          <span>{c.name}</span>
-          {c.entity.startsWith("light.") ? (
-            <>
+    <>
+      <div className="controls">
+        {controls.map((c) => (
+          <div key={c.id}>
+            <span>{c.name}</span>
+            {c.entity.startsWith("light.") ? (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      { action: "device", id, device: c.id, on: true },
+                      "Command sent",
+                    )
+                  }
+                >
+                  On
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      { action: "device", id, device: c.id, on: false },
+                      "Command sent",
+                    )
+                  }
+                >
+                  Off
+                </Button>
+              </>
+            ) : (
               <Button
                 variant="outline"
                 disabled={busy}
                 onClick={() =>
-                  act(
-                    { action: "device", id, device: c.id, on: true },
-                    "Command sent",
-                  )
+                  act({ action: "device", id, device: c.id }, "Command sent")
                 }
               >
-                On
+                Run
               </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() =>
-                  act(
-                    { action: "device", id, device: c.id, on: false },
-                    "Command sent",
-                  )
-                }
-              >
-                Off
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                act({ action: "device", id, device: c.id }, "Command sent")
-              }
+            )}
+          </div>
+        ))}
+      </div>
+      <Announcements id={id} act={act} busy={busy} />
+    </>
+  );
+}
+
+function Announcements({
+  id,
+  act,
+  busy,
+}: {
+  id: string;
+  act: (body: Record<string, unknown>, message?: string) => Promise<boolean>;
+  busy: boolean;
+}) {
+  const [targets, setTargets] = useState<
+    { entity: string; name: string; available: boolean }[]
+  >([]);
+  const [entity, setEntity] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  async function discover() {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api({ action: "speech-targets" });
+      setTargets(result.targets);
+      setEntity((previous) =>
+        result.targets.some(
+          (target: { entity: string; available: boolean }) =>
+            target.entity === previous && target.available,
+        )
+          ? previous
+          : result.targets.find(
+              (target: { available: boolean }) => target.available,
+            )?.entity || "",
+      );
+      setLoaded(true);
+    } catch (e) {
+      setError((e as Error).message);
+      setTargets([]);
+      setEntity("");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <form
+      className="announcements"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void act(
+          { action: "speak", id, entity, message },
+          "Announcement accepted by Home Assistant",
+        );
+      }}
+    >
+      <h3>Alexa announcements</h3>
+      <p>
+        Type a clue or message. Speak reads it aloud; Announce adds a chime
+        first.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={busy || loading}
+        onClick={() => void discover()}
+      >
+        {loading
+          ? "Finding speakers…"
+          : loaded
+            ? "Refresh speakers"
+            : "Find speakers"}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {loaded && !error && targets.length === 0 && (
+        <p>
+          No Speak or Announce entities found. Finish Alexa Devices setup in
+          Home Assistant, then refresh speakers.
+        </p>
+      )}
+      {targets.length > 0 && (
+        <>
+          <label>
+            Speaker
+            <select
+              value={entity}
+              required
+              disabled={busy || loading}
+              onChange={(event) => setEntity(event.target.value)}
             >
-              Run
-            </Button>
-          )}
-        </div>
-      ))}
-    </div>
+              <option value="">Choose a speaker</option>
+              {targets.map((target) => (
+                <option
+                  key={target.entity}
+                  value={target.entity}
+                  disabled={!target.available}
+                >
+                  {target.name}
+                  {!target.available ? " (unavailable)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Message
+            <textarea
+              value={message}
+              required
+              maxLength={1000}
+              rows={3}
+              placeholder="Your next clue is hidden beneath the clock…"
+              onChange={(event) => setMessage(event.target.value)}
+            />
+          </label>
+          <small>{message.length}/1000 characters</small>
+          <Button
+            type="submit"
+            disabled={busy || loading || !entity || !message.trim()}
+          >
+            Say it
+          </Button>
+        </>
+      )}
+    </form>
   );
 }
