@@ -30,6 +30,12 @@ export function GameEditor({
   return (
     <form
       className="game-editor"
+      onInvalidCapture={(event) => {
+        const challenge = (event.target as HTMLElement).closest(
+          "details.challenge-editor",
+        );
+        if (challenge instanceof HTMLDetailsElement) challenge.open = true;
+      }}
       onSubmit={(e) => {
         e.preventDefault();
         void save(game);
@@ -89,285 +95,291 @@ export function GameEditor({
         snapshot.
       </p>
       {game.areas.map((a, i) => (
-        <fieldset key={i}>
-          <legend>Challenge {i + 1}</legend>
-          <label>
-            Challenge ID
-            <input
-              required
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              maxLength={80}
-              value={a.id}
-              onChange={(e) => patch(i, { id: e.target.value })}
-            />
-          </label>
-          <label>
-            Room name
-            <input
-              required
-              maxLength={80}
-              value={a.name}
-              onChange={(e) => patch(i, { name: e.target.value })}
-            />
-          </label>
-          <label>
-            Challenge type
-            <select
-              value={a.kind}
-              onChange={(e) =>
-                patch(i, {
-                  kind: e.target.value,
-                  choices: ["colors", "symbols"].includes(e.target.value)
-                    ? e.target.value === "colors"
-                      ? ["#ff0000", "#0000ff"]
-                      : ["★", "●"]
-                    : undefined,
-                  qrMode: e.target.value === "qr" ? "prompted" : undefined,
-                  unlockCode: "",
-                  hint: "",
-                })
-              }
-            >
-              {Object.entries(kinds).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {a.kind === "qr" && (
+        <details className="challenge-editor" key={i} open>
+          <summary>
+            Challenge {i + 1}: {a.name || "Unnamed room"}
+          </summary>
+          <div className="challenge-fields">
             <label>
-              QR presentation
+              Challenge ID
+              <input
+                required
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                maxLength={80}
+                value={a.id}
+                onChange={(e) => patch(i, { id: e.target.value })}
+              />
+            </label>
+            <label>
+              Room name
+              <input
+                required
+                maxLength={80}
+                value={a.name}
+                onChange={(e) => patch(i, { name: e.target.value })}
+              />
+            </label>
+            <label>
+              Challenge type
               <select
-                value={a.qrMode || "hidden"}
+                value={a.kind}
                 onChange={(e) =>
                   patch(i, {
-                    qrMode: e.target.value as "hidden" | "prompted",
+                    kind: e.target.value,
+                    choices: ["colors", "symbols"].includes(e.target.value)
+                      ? e.target.value === "colors"
+                        ? ["#ff0000", "#0000ff"]
+                        : ["★", "●"]
+                      : undefined,
+                    qrMode: e.target.value === "qr" ? "prompted" : undefined,
+                    unlockCode: "",
                     hint: "",
                   })
                 }
               >
-                <option value="prompted">Offer scanner in app</option>
-                <option value="hidden">
-                  Hidden: players discover and scan physical code
-                </option>
+                {Object.entries(kinds).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
-          )}
-          {!(a.kind === "qr" && a.qrMode !== "prompted") && (
-            <label>
-              Clue before solving
-              <textarea
-                maxLength={1000}
-                value={a.hint}
-                onChange={(e) => patch(i, { hint: e.target.value })}
-              />
-            </label>
-          )}
-          <label>
-            Story revealed after solving
-            <textarea
-              maxLength={10000}
-              value={a.description}
-              onChange={(e) => patch(i, { description: e.target.value })}
-            />
-          </label>
-          {["colors", "symbols"].includes(a.kind) && (
-            <label>
-              Choices, separated by | (2–12 unique values; colors use #rrggbb)
-              <input
-                required
-                value={a.choices?.join("|") || ""}
-                onChange={(e) =>
-                  patch(i, { choices: e.target.value.split("|") })
-                }
-              />
-            </label>
-          )}
-          <label>
-            {a.kind === "qr"
-              ? "QR token (use a unique value)"
-              : ["colors", "symbols"].includes(a.kind)
-                ? "Correct order, separated by | (2–20 choices; repetitions allowed)"
-                : "Correct answer"}
-            <input
-              required
-              maxLength={256}
-              pattern={a.kind === "numbers" ? "[0-9]+" : undefined}
-              value={a.unlockCode || ""}
-              onChange={(e) => patch(i, { unlockCode: e.target.value })}
-            />
-          </label>
-          <fieldset>
-            <legend>When solved</legend>
-            <p>
-              Actions run in order. Add controls below first; a scene can set
-              all four lights.
-            </p>
-            {(a.onComplete || []).map((action, n) => (
-              <div className="editor-item" key={n}>
-                {action.type === "control" ? (
-                  <>
-                    <label>
-                      Home Assistant control
-                      <select
-                        required
-                        value={action.controlId}
-                        onChange={(e) =>
-                          patch(i, {
-                            onComplete: a.onComplete!.map((v, k) =>
-                              k === n
-                                ? { ...action, controlId: e.target.value }
-                                : v,
-                            ),
-                          })
-                        }
-                      >
-                        <option value="">Choose control</option>
-                        {game.controls.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={action.on !== false}
-                        onChange={(e) =>
-                          patch(i, {
-                            onComplete: a.onComplete!.map((v, k) =>
-                              k === n ? { ...action, on: e.target.checked } : v,
-                            ),
-                          })
-                        }
-                      />{" "}
-                      Turn on (off applies only to lights)
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <label>
-                      Speaker entity
-                      <input
-                        required
-                        placeholder="notify.living_room_speak"
-                        value={action.entity}
-                        onChange={(e) =>
-                          patch(i, {
-                            onComplete: a.onComplete!.map((v, k) =>
-                              k === n
-                                ? { ...action, entity: e.target.value }
-                                : v,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Spoken riddle
-                      <textarea
-                        required
-                        maxLength={1000}
-                        value={action.message}
-                        onChange={(e) =>
-                          patch(i, {
-                            onComplete: a.onComplete!.map((v, k) =>
-                              k === n
-                                ? { ...action, message: e.target.value }
-                                : v,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() =>
+            {a.kind === "qr" && (
+              <label>
+                QR presentation
+                <select
+                  value={a.qrMode || "hidden"}
+                  onChange={(e) =>
                     patch(i, {
-                      onComplete: a.onComplete!.filter((_, k) => k !== n),
+                      qrMode: e.target.value as "hidden" | "prompted",
+                      hint: "",
                     })
                   }
                 >
-                  Remove action
+                  <option value="prompted">Offer scanner in app</option>
+                  <option value="hidden">
+                    Hidden: players discover and scan physical code
+                  </option>
+                </select>
+              </label>
+            )}
+            {!(a.kind === "qr" && a.qrMode !== "prompted") && (
+              <label>
+                Clue before solving
+                <textarea
+                  maxLength={1000}
+                  value={a.hint}
+                  onChange={(e) => patch(i, { hint: e.target.value })}
+                />
+              </label>
+            )}
+            <label>
+              Story revealed after solving
+              <textarea
+                maxLength={10000}
+                value={a.description}
+                onChange={(e) => patch(i, { description: e.target.value })}
+              />
+            </label>
+            {["colors", "symbols"].includes(a.kind) && (
+              <label>
+                Choices, separated by | (2–12 unique values; colors use #rrggbb)
+                <input
+                  required
+                  value={a.choices?.join("|") || ""}
+                  onChange={(e) =>
+                    patch(i, { choices: e.target.value.split("|") })
+                  }
+                />
+              </label>
+            )}
+            <label>
+              {a.kind === "qr"
+                ? "QR token (use a unique value)"
+                : ["colors", "symbols"].includes(a.kind)
+                  ? "Correct order, separated by | (2–20 choices; repetitions allowed)"
+                  : "Correct answer"}
+              <input
+                required
+                maxLength={256}
+                pattern={a.kind === "numbers" ? "[0-9]+" : undefined}
+                value={a.unlockCode || ""}
+                onChange={(e) => patch(i, { unlockCode: e.target.value })}
+              />
+            </label>
+            <fieldset>
+              <legend>When solved</legend>
+              <p>
+                Actions run in order. Add controls below first; a scene can set
+                all four lights.
+              </p>
+              {(a.onComplete || []).map((action, n) => (
+                <div className="editor-item" key={n}>
+                  {action.type === "control" ? (
+                    <>
+                      <label>
+                        Home Assistant control
+                        <select
+                          required
+                          value={action.controlId}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? { ...action, controlId: e.target.value }
+                                  : v,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="">Choose control</option>
+                          {game.controls.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={action.on !== false}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? { ...action, on: e.target.checked }
+                                  : v,
+                              ),
+                            })
+                          }
+                        />{" "}
+                        Turn on (off applies only to lights)
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        Speaker entity
+                        <input
+                          required
+                          placeholder="notify.living_room_speak"
+                          value={action.entity}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? { ...action, entity: e.target.value }
+                                  : v,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Spoken riddle
+                        <textarea
+                          required
+                          maxLength={1000}
+                          value={action.message}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? { ...action, message: e.target.value }
+                                  : v,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() =>
+                      patch(i, {
+                        onComplete: a.onComplete!.filter((_, k) => k !== n),
+                      })
+                    }
+                  >
+                    Remove action
+                  </Button>
+                </div>
+              ))}
+              <div className="actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={(a.onComplete?.length || 0) >= 10}
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: [
+                        ...(a.onComplete || []),
+                        {
+                          type: "control",
+                          controlId: game.controls[0]?.id || "",
+                          on: true,
+                        },
+                      ],
+                    })
+                  }
+                >
+                  Add scene / script / light action
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={(a.onComplete?.length || 0) >= 10}
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: [
+                        ...(a.onComplete || []),
+                        { type: "speech", entity: "", message: "" },
+                      ],
+                    })
+                  }
+                >
+                  Add Alexa speech
                 </Button>
               </div>
-            ))}
+            </fieldset>
+            {a.kind === "external" && (
+              <p>
+                Use this challenge ID and correct answer in the authenticated
+                callback under the session Automation section.
+              </p>
+            )}
             <div className="actions">
               <Button
                 type="button"
-                variant="outline"
-                disabled={(a.onComplete?.length || 0) >= 10}
-                onClick={() =>
-                  patch(i, {
-                    onComplete: [
-                      ...(a.onComplete || []),
-                      {
-                        type: "control",
-                        controlId: game.controls[0]?.id || "",
-                        on: true,
-                      },
-                    ],
-                  })
-                }
+                variant="ghost"
+                disabled={i === 0}
+                onClick={() => {
+                  const areas = [...game.areas];
+                  [areas[i - 1], areas[i]] = [areas[i], areas[i - 1]];
+                  setGame({ ...game, areas });
+                }}
               >
-                Add scene / script / light action
+                Move up
               </Button>
               <Button
                 type="button"
-                variant="outline"
-                disabled={(a.onComplete?.length || 0) >= 10}
+                variant="ghost"
+                disabled={game.areas.length === 1}
                 onClick={() =>
-                  patch(i, {
-                    onComplete: [
-                      ...(a.onComplete || []),
-                      { type: "speech", entity: "", message: "" },
-                    ],
+                  setGame({
+                    ...game,
+                    areas: game.areas.filter((_, n) => n !== i),
                   })
                 }
               >
-                Add Alexa speech
+                Remove challenge
               </Button>
             </div>
-          </fieldset>
-          {a.kind === "external" && (
-            <p>
-              Use this challenge ID and correct answer in the authenticated
-              callback under the session Automation section.
-            </p>
-          )}
-          <div className="actions">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={i === 0}
-              onClick={() => {
-                const areas = [...game.areas];
-                [areas[i - 1], areas[i]] = [areas[i], areas[i - 1]];
-                setGame({ ...game, areas });
-              }}
-            >
-              Move up
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={game.areas.length === 1}
-              onClick={() =>
-                setGame({
-                  ...game,
-                  areas: game.areas.filter((_, n) => n !== i),
-                })
-              }
-            >
-              Remove challenge
-            </Button>
           </div>
-        </fieldset>
+        </details>
       ))}
       <Button
         type="button"

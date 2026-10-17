@@ -32,6 +32,7 @@ button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+summary:focus-visible,
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -178,6 +179,7 @@ textarea {
 }
 .game-editor,
 .game-editor fieldset,
+.challenge-fields,
 .editor-item {
   display: grid;
   gap: 20px;
@@ -188,6 +190,20 @@ textarea {
 }
 .game-editor fieldset {
   padding-block: 12px;
+}
+.challenge-editor {
+  border-top: 1px solid #e2e7dc;
+  padding-top: 16px;
+  min-width: 0;
+}
+.challenge-editor > summary {
+  cursor: pointer;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+}
+.challenge-editor[open] > summary {
+  margin-bottom: 20px;
 }
 .game-editor legend {
   padding-bottom: 8px;
