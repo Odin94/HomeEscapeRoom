@@ -3,6 +3,7 @@ import { useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
 import { GameEditor, ChallengeInput } from "./game-editor";
+import { MarkerPrint } from "./marker-print";
 import { useStore } from "zustand";
 import { createGameStore, type Game, type State } from "../lib/game-store";
 async function api(body?: unknown) {
@@ -440,15 +441,7 @@ export function App() {
                     </section>
                   ))}
                   {qr && (
-                    <section className="panel qr">
-                      <img src={qr} alt="Room marker" />
-                      <Button onClick={() => window.print()}>
-                        Print marker
-                      </Button>
-                      <Button variant="ghost" onClick={() => setQr("")}>
-                        Close
-                      </Button>
-                    </section>
+                    <MarkerPrint key={qr} qr={qr} close={() => setQr("")} />
                   )}
                 </>
               )}

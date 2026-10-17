@@ -275,6 +275,50 @@ textarea {
 .qr img {
   display: block;
   max-width: 100%;
+  height: auto;
+}
+.marker-content {
+  max-width: 170mm;
+  margin: 24px auto;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: #000;
+}
+.marker-content > img {
+  margin: 20px auto;
+}
+.marker-content > :not(img) {
+  margin: 16px 0;
+}
+.marker-content h1,
+.marker-content h2,
+.marker-content h3,
+.marker-content h4,
+.marker-content h5,
+.marker-content h6 {
+  font-weight: 700;
+  line-height: 1.3;
+}
+.marker-content p {
+  color: inherit;
+}
+.marker-content ul,
+.marker-content ol {
+  text-align: left;
+  list-style-position: inside;
+}
+.marker-content ul {
+  list-style-type: disc;
+}
+.marker-content ol {
+  list-style-type: decimal;
+}
+.marker-content h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.marker-content pre {
+  white-space: pre-wrap;
 }
 .join-link {
   display: flex;
@@ -343,15 +387,35 @@ textarea {
   }
 }
 @media print {
+  @page {
+    margin: 0;
+  }
+  :root,
+  body,
+  .admin-shell {
+    background: white;
+  }
   header,
-  .admin-shell main > h1,
-  .admin-shell main > .panel:not(.qr),
+  .admin-shell main > :not(.qr),
+  .marker-editor,
   .button,
   .toast {
     display: none;
   }
   .qr {
     margin: 0;
+    padding: 0;
     box-shadow: none;
+    border-radius: 0;
+  }
+  .admin-shell main {
+    max-width: none;
+    padding: 20mm;
+  }
+  .marker-content {
+    margin: 0 auto;
+  }
+  .marker-content > img {
+    break-inside: avoid;
   }
 }
