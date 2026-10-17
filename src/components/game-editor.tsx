@@ -306,49 +306,51 @@ export function GameEditor({
                 <fieldset className="color-answer-editor">
                   <legend>Color options</legend>
                   <p>2–12 unique colors.</p>
-                  {(a.choices || []).map((color, n) => (
-                    <div className="color-answer-row" key={n}>
-                      <label>
-                        Color {n + 1}
-                        <input
-                          type="color"
-                          value={color}
-                          onChange={(e) =>
+                  <div className="color-options-grid">
+                    {(a.choices || []).map((color, n) => (
+                      <div className="color-answer-row" key={n}>
+                        <label>
+                          Color {n + 1}
+                          <input
+                            type="color"
+                            value={color}
+                            onChange={(e) =>
+                              patch(i, {
+                                choices: a.choices!.map((value, k) =>
+                                  k === n ? e.target.value : value,
+                                ),
+                                unlockCode: (a.unlockCode || "")
+                                  .split("|")
+                                  .map((value) =>
+                                    value.toLowerCase() === color.toLowerCase()
+                                      ? e.target.value
+                                      : value,
+                                  )
+                                  .join("|"),
+                              })
+                            }
+                          />
+                        </label>
+                        <RemoveButton
+                          label={`Remove color ${n + 1}`}
+                          configured={false}
+                          disabled={a.choices!.length <= 2}
+                          remove={() =>
                             patch(i, {
-                              choices: a.choices!.map((value, k) =>
-                                k === n ? e.target.value : value,
-                              ),
+                              choices: a.choices!.filter((_, k) => k !== n),
                               unlockCode: (a.unlockCode || "")
                                 .split("|")
-                                .map((value) =>
-                                  value.toLowerCase() === color.toLowerCase()
-                                    ? e.target.value
-                                    : value,
+                                .filter(
+                                  (value) =>
+                                    value.toLowerCase() !== color.toLowerCase(),
                                 )
                                 .join("|"),
                             })
                           }
                         />
-                      </label>
-                      <RemoveButton
-                        label={`Remove color ${n + 1}`}
-                        configured={false}
-                        disabled={a.choices!.length <= 2}
-                        remove={() =>
-                          patch(i, {
-                            choices: a.choices!.filter((_, k) => k !== n),
-                            unlockCode: (a.unlockCode || "")
-                              .split("|")
-                              .filter(
-                                (value) =>
-                                  value.toLowerCase() !== color.toLowerCase(),
-                              )
-                              .join("|"),
-                          })
-                        }
-                      />
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
                   <Button
                     type="button"
                     variant="outline"

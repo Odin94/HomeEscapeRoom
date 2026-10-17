@@ -109,7 +109,7 @@
   grid-column: 2 / -1;
 }
 .light-step-fields input[type="color"] {
-  width: 100%;
+  width: 64px;
   height: 40px;
   padding: 4px;
   cursor: pointer;
@@ -740,9 +740,32 @@ textarea {
   margin-bottom: 0;
 }
 .color-answer-row input[type="color"] {
+  width: 64px;
   height: 40px;
   padding: 4px;
   cursor: pointer;
+}
+.color-answer-row label:has(input[type="color"]) {
+  flex: 0 0 auto;
+}
+.color-options-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.color-options-grid .color-answer-row {
+  margin-bottom: 0;
+}
+@media (max-width: 640px) {
+  .color-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 360px) {
+  .color-options-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .color-order-select {
   display: flex;
