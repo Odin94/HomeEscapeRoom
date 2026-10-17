@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Trash2 } from "lucide-react";
 import { gameDraftKey, readGameDraft } from "../lib/game-draft";
 import type { Area, Game } from "../lib/game-store";
@@ -22,26 +23,67 @@ function RemoveButton({
   disabled?: boolean;
   remove: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const trigger = useRef<HTMLButtonElement | null>(null);
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      className="remove-item"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (
-          !configured ||
-          window.confirm(`${label}? Its configured values will be lost.`)
-        )
-          remove();
-      }}
-    >
-      <Trash2 size={18} aria-hidden="true" />
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        className="remove-item"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          trigger.current = event.currentTarget;
+          if (configured) setConfirming(true);
+          else remove();
+        }}
+      >
+        <Trash2 size={18} aria-hidden="true" />
+      </Button>
+      <Dialog.Root open={confirming} onOpenChange={setConfirming}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="confirmation-overlay" />
+          <Dialog.Content
+            className="confirmation-modal"
+            onClick={(event) => event.stopPropagation()}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              trigger.current?.focus();
+            }}
+          >
+            <Dialog.Title>{label}?</Dialog.Title>
+            <Dialog.Description>
+              This will remove the item and its configured values from this
+              game. You can’t undo this.
+            </Dialog.Description>
+            <div className="actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="remove-confirm"
+                onClick={() => {
+                  setConfirming(false);
+                  remove();
+                }}
+              >
+                <Trash2 size={18} aria-hidden="true" />
+                {label}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 export function GameEditor({

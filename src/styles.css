@@ -494,3 +494,35 @@ textarea {
   float: right;
   margin-top: -8px;
 }
+
+.confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #263d3566;
+}
+.confirmation-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 101;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 28px;
+  border-radius: 14px;
+  background: #fff;
+  color: #263d35;
+  box-shadow: 0 16px 64px #233d2926;
+}
+.confirmation-modal h2 {
+  margin: 0;
+}
+.confirmation-modal .actions {
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.button.remove-confirm {
+  background: #8c4038;
+}
