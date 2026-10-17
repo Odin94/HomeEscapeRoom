@@ -120,3 +120,38 @@ test("completion actions reject dangling controls and arbitrary services", () =>
       false,
     );
 });
+
+test("text and external answers support optional capitalization with whitespace trimming", () => {
+  for (const kind of ["text", "external"]) {
+    for (const caseSensitive of [undefined, false, true]) {
+      const game = gameSchema.parse(
+        makeGame({
+          kind,
+          unlockCode: "  Raven\r\n",
+          ...(caseSensitive === undefined ? {} : { caseSensitive }),
+        }),
+      );
+      assert.equal(nextUnlock(0, "\n\t Raven \r\n", game), 1);
+      if (caseSensitive)
+        assert.throws(() => nextUnlock(0, "\n raven \t", game));
+      else assert.equal(nextUnlock(0, "\n raven \t", game), 1);
+      assert.throws(() => nextUnlock(0, "Ra ven", game));
+    }
+  }
+});
+
+test("every answer type trims surrounding whitespace in input and saved snapshots", () => {
+  for (const [kind, unlockCode, choices] of [
+    ["numbers", "0042", undefined],
+    ["qr", "Marker-A", undefined],
+    ["colors", "#ff0000|#0000ff", ["#ff0000", "#0000ff"]],
+    ["symbols", "star|moon", ["star", "moon"]],
+  ] as const) {
+    const game = gameSchema.parse(
+      makeGame({ kind, unlockCode, ...(choices ? { choices } : {}) }),
+    );
+    game.areas[0].unlockCode = ` \n${unlockCode}\t `;
+    assert.equal(nextUnlock(0, `\r\n ${unlockCode} \t\n`, game), 1);
+    assert.throws(() => nextUnlock(0, " \n\t", game));
+  }
+});

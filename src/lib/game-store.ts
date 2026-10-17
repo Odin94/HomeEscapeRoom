@@ -20,6 +20,7 @@ export type Area = {
   hint: string;
   description: string;
   unlockCode?: string;
+  caseSensitive?: boolean;
   playerView?: string;
 };
 type Session = {

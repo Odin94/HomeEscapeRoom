@@ -54,6 +54,7 @@ export const gameSchema = z
             hint: z.string().max(1000),
             description: z.string().max(10000),
             unlockCode: z.string().trim().min(1).max(256),
+            caseSensitive: z.boolean().optional(),
             playerView: z.enum(["narrative"]).default("narrative"),
           })
           .superRefine((area, ctx) => {
@@ -169,9 +170,12 @@ export function nextUnlock(
     throw new Error("Your team has already completed the game.");
   const area = game.areas[progress];
   const text = area.kind === "text" || area.kind === "external";
+  const ignoreCase = text && !area.caseSensitive;
+  const answer = code.trim();
+  const expected = area.unlockCode.trim();
   if (
-    (text ? code.trim().toLowerCase() : code.trim()) !==
-    (text ? area.unlockCode.toLowerCase() : area.unlockCode)
+    (ignoreCase ? answer.toLowerCase() : answer) !==
+    (ignoreCase ? expected.toLowerCase() : expected)
   )
     throw new Error("That answer does not unlock this area.");
   return progress + 1;

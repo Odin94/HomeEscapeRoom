@@ -207,6 +207,21 @@ export function GameEditor({
                 onChange={(e) => patch(i, { unlockCode: e.target.value })}
               />
             </label>
+            {["text", "external"].includes(a.kind) && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={a.caseSensitive ?? false}
+                  onChange={(e) =>
+                    patch(i, { caseSensitive: e.target.checked })
+                  }
+                />
+                Capitalization matters
+              </label>
+            )}
+            <p>
+              Leading and trailing whitespace is ignored when checking answers.
+            </p>
             <fieldset>
               <legend>When solved</legend>
               <p>
