@@ -33,6 +33,7 @@ const draftSchema = z.object({
                 groups: z.array(
                   z.object({
                     repeat: z.number().optional(),
+                    loop: z.enum(["next-challenge", "replaced"]).optional(),
                     entities: z.array(z.string()),
                     steps: z.array(
                       z.union([

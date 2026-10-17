@@ -23,6 +23,7 @@ export const lightTransitionSchema = z.strictObject({
     .array(
       z.strictObject({
         repeat: z.number().int().min(1).max(100).optional(),
+        loop: z.enum(["next-challenge", "replaced"]).optional(),
         entities: z
           .array(z.string().regex(/^light\.[a-z0-9_]+$/))
           .min(1)
@@ -58,7 +59,11 @@ export async function runLightTransition(
   const results = await Promise.allSettled(
     action.groups.map(async (group) => {
       try {
-        for (let cycle = 0; cycle < (group.repeat ?? 1); cycle++) {
+        for (
+          let cycle = 0;
+          group.loop || cycle < (group.repeat ?? 1);
+          cycle++
+        ) {
           for (const step of group.steps) {
             if (failed || !active())
               throw new Error(

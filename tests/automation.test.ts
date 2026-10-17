@@ -17,6 +17,110 @@ after(() => {
   closeStore();
   rmSync(directory, { recursive: true, force: true });
 });
+test("continuous light groups do not block answers and stop on next completion or overlapping manual controls", async () => {
+  const gm = (
+    await call({ action: "login", key: "automation-test-key" })
+  ).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const previousFetch = globalThis.fetch;
+  const sent: { entity_id: string | string[] }[] = [];
+  try {
+    saveSettings({
+      haUrl: "http://ha.test",
+      haToken: "test-token",
+      adminKey: "automation-test-key",
+      publicUrl: "",
+    });
+    globalThis.fetch = async (_url, init) => {
+      sent.push(JSON.parse(String(init?.body)));
+      return Response.json([]);
+    };
+    for (const mode of ["next-challenge", "replaced"] as const) {
+      const game = {
+        id: `loop-${mode}`,
+        name: "Loop test",
+        autoStart: true,
+        controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+        areas: [0, 1, 2].map((n) => ({
+          id: `area-${n}`,
+          name: `Area ${n}`,
+          kind: "text",
+          hint: "",
+          description: "",
+          unlockCode: "yes",
+          onComplete:
+            n === 0
+              ? [
+                  {
+                    type: "lights",
+                    groups: [
+                      {
+                        loop: mode,
+                        entities: ["light.one", "light.two"],
+                        steps: [{ mode: "off", seconds: 3600 }],
+                      },
+                    ],
+                  },
+                ]
+              : [],
+        })),
+      };
+      assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+      const { id } = await (
+        await call({ action: "create", gameId: game.id, name: "Loop team" }, gm)
+      ).json();
+      const player = (await call({ action: "join", id, name: "Ada" })).headers
+        .get("set-cookie")!
+        .split(";")[0];
+      assert.equal(
+        (
+          await call(
+            { action: "unlock", challengeId: "area-0", code: "yes" },
+            player,
+          )
+        ).status,
+        200,
+      );
+      let state = await (await call(undefined, player)).json();
+      assert.equal(state.automationPending, false);
+      assert.equal(
+        (await (await call(undefined, gm)).json()).automation.filter(
+          (r: { session_id: string; status: string }) =>
+            r.session_id === id && r.status === "looping",
+        ).length,
+        1,
+      );
+      assert.equal(
+        (
+          await call(
+            { action: "unlock", challengeId: "area-1", code: "yes" },
+            player,
+          )
+        ).status,
+        200,
+      );
+      if (mode === "replaced") {
+        assert.equal(
+          (await call({ action: "device", id, device: "lamp", on: true }, gm))
+            .status,
+          200,
+        );
+      }
+      state = await (await call(undefined, gm)).json();
+      assert.equal(
+        state.automation.filter(
+          (r: { session_id: string }) => r.session_id === id,
+        ).length,
+        0,
+      );
+      await call({ action: "status", id, status: "closed" }, gm);
+    }
+    assert.equal(sent.length, 3);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
 const origin = "http://localhost:3000";
 function call(body?: Record<string, unknown>, cookie = "") {
   return handle(

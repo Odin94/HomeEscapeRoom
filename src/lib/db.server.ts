@@ -14,7 +14,10 @@ import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
 import { settings, saveSettings } from "./settings.server";
 import { lanOrigin } from "./network.server";
 import { speechTargets, speak, lightTargets, ha } from "./speech.server";
-import { lightTransitionSchema, runLightTransition } from "./light-transition";
+import { lightTransitionSchema } from "./light-transition";
+import { LightLoops } from "./light-loops.server";
+const lightLoops = new LightLoops();
+let closing = false;
 const databasePath = process.env.DATABASE_PATH || "data/threshold.sqlite";
 const db = openStore(databasePath);
 db.update(actionRuns)
@@ -23,9 +26,11 @@ db.update(actionRuns)
     error:
       "Server restarted during this action. Check device state before retrying; speech may repeat.",
   })
-  .where(eq(actionRuns.status, "running"))
+  .where(sql`${actionRuns.status} IN ('running', 'looping')`)
   .run();
 export function closeStore() {
+  closing = true;
+  void lightLoops.close();
   db.$client.close();
 }
 if (!db.select({ id: sessions.id }).from(sessions).limit(1).get())
@@ -111,10 +116,28 @@ function pending(id: string) {
     .select()
     .from(actionRuns)
     .where(
-      and(eq(actionRuns.session_id, id), sql`${actionRuns.status} != 'done'`),
+      and(
+        eq(actionRuns.session_id, id),
+        sql`${actionRuns.status} IN ('pending', 'running', 'failed')`,
+      ),
     )
     .orderBy(actionRuns.id)
     .all();
+}
+async function affectedLights(entity: string): Promise<string[]> {
+  if (entity.startsWith("light.")) return [entity];
+  // A scene can affect lights outside the selected group.
+  const response = await ha(`states/${entity}`);
+  const state = await response.json();
+  const members = state?.attributes?.entity_id;
+  if (
+    !Array.isArray(members) ||
+    members.some((member) => typeof member !== "string")
+  )
+    throw new Error(
+      "Cannot determine scene lights. Use color / brightness steps or configure scene entities in Home Assistant.",
+    );
+  return members.filter((member: string) => member.startsWith("light."));
 }
 async function runActions(id: string) {
   for (const run of pending(id)) {
@@ -129,20 +152,82 @@ async function runActions(id: string) {
     try {
       const action = JSON.parse(run.payload);
       if (action.type === "speech") await speak(action);
-      else if (action.type === "lights")
-        await runLightTransition(
-          lightTransitionSchema.parse(action),
-          async (domain, service, data) => {
-            await ha(`services/${domain}/${service}`, data);
-          },
-          (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-          () => session(id).status === "running",
+      else if (action.type === "lights") {
+        const transition = lightTransitionSchema.parse(action);
+        await Promise.all(
+          transition.groups.map(async (group) => {
+            const entities = [
+              ...new Set([
+                ...group.entities,
+                ...(
+                  await Promise.all(
+                    group.steps.flatMap((step) =>
+                      step.mode === "scene"
+                        ? [affectedLights(step.entity)]
+                        : [],
+                    ),
+                  )
+                ).flat(),
+              ]),
+            ];
+            const send = async (
+              domain: string,
+              service: string,
+              data: Record<string, unknown>,
+            ) => {
+              await ha(`services/${domain}/${service}`, data);
+            };
+            await lightLoops.start(
+              id,
+              run.id,
+              group,
+              send,
+              (error) => {
+                if (closing) return;
+                db.update(actionRuns)
+                  .set({
+                    status: "failed",
+                    error:
+                      error instanceof Error
+                        ? error.message
+                        : "Light loop failed",
+                  })
+                  .where(eq(actionRuns.id, run.id))
+                  .run();
+                event(id, "Light loop failed; game master retry required");
+                void lightLoops.stopAction(run.id);
+              },
+              () => {
+                if (!closing && !lightLoops.hasAction(run.id))
+                  db.update(actionRuns)
+                    .set({ status: "done" })
+                    .where(
+                      and(
+                        eq(actionRuns.id, run.id),
+                        eq(actionRuns.status, "looping"),
+                      ),
+                    )
+                    .run();
+              },
+              entities,
+              () =>
+                !closing &&
+                session(id).status === "running" &&
+                db
+                  .select()
+                  .from(actionRuns)
+                  .where(eq(actionRuns.id, run.id))
+                  .get()?.status !== "failed",
+            );
+          }),
         );
-      else {
+      } else {
         const control = definition(id).controls.find(
           (c) => c.id === action.controlId,
         )!;
         const domain = control.entity.split(".")[0];
+        if (lightLoops.active && (domain === "light" || domain === "scene"))
+          await lightLoops.takeOver(await affectedLights(control.entity));
         const config = settings();
         if (!config.haUrl || !config.haToken)
           throw new Error(
@@ -164,8 +249,8 @@ async function runActions(id: string) {
           throw new Error(`Home Assistant returned ${result.status}.`);
       }
       db.update(actionRuns)
-        .set({ status: "done" })
-        .where(eq(actionRuns.id, run.id))
+        .set({ status: lightLoops.hasAction(run.id) ? "looping" : "done" })
+        .where(and(eq(actionRuns.id, run.id), eq(actionRuns.status, "running")))
         .run();
       event(id, "Completion action succeeded");
     } catch (error) {
@@ -176,6 +261,7 @@ async function runActions(id: string) {
         })
         .where(eq(actionRuns.id, run.id))
         .run();
+      await lightLoops.stopAction(run.id);
       event(id, "Completion action failed; game master retry required");
       break;
     }
@@ -223,6 +309,7 @@ async function complete(
       .values({ session_id: id, message: `Unlocked ${area.name}` })
       .run();
   });
+  await lightLoops.stopSession(id, true);
   await runActions(id);
 }
 export async function handleCallback(request: Request) {
@@ -541,6 +628,7 @@ export async function handle(request: Request) {
         .set({ status: body.status })
         .where(eq(sessions.id, body.id))
         .run();
+      if (body.status !== "running") await lightLoops.stopSession(body.id);
       if (body.status === "closed") {
         db.delete(players).where(eq(players.session_id, body.id)).run();
       }
@@ -561,6 +649,8 @@ export async function handle(request: Request) {
       const control = game.controls.find((c) => c.id === body.device);
       if (!control) throw new Error("Unknown control");
       const domain = control.entity.split(".")[0];
+      if (lightLoops.active && (domain === "light" || domain === "scene"))
+        await lightLoops.takeOver(await affectedLights(control.entity));
       if (domain === "light" && typeof body.on !== "boolean")
         throw new Error("Choose lights on or off.");
       const d = {

@@ -916,11 +916,15 @@ function SessionAutomation({
       </p>
       {runs.map((r) => (
         <p key={r.id} role="status">
-          {r.status}: {r.error || "Waiting for action completion"}
+          {r.status}:{" "}
+          {r.error ||
+            (r.status === "looping"
+              ? "Lights looping in the background; players can continue"
+              : "Waiting for action completion")}
         </p>
       ))}
       <div className="actions">
-        {runs.length > 0 && (
+        {runs.some((r) => r.status === "failed") && (
           <Button
             disabled={busy || runs.some((r) => r.status === "running")}
             onClick={() => void act({ action: "retry-actions", id })}

@@ -244,7 +244,11 @@ export function LightTransitionEditor({
                     {group.entities.length} lights · {group.steps.length} steps
                     · {group.steps.reduce((sum, step) => sum + step.seconds, 0)}{" "}
                     seconds per play
-                    {(group.repeat ?? 1) > 1 && ` � ${group.repeat} repeats`}
+                    {group.loop
+                      ? " | Looping"
+                      : (group.repeat ?? 1) > 1
+                        ? ` | ${group.repeat} repeats`
+                        : ""}
                   </small>
                 </span>
                 <RemoveButton
@@ -260,16 +264,40 @@ export function LightTransitionEditor({
                 />
               </summary>
               <label>
-                <input
-                  type="checkbox"
-                  checked={(group.repeat ?? 1) > 1}
-                  onChange={(e) =>
-                    groupPatch(i, { repeat: e.target.checked ? 2 : 1 })
+                Playback
+                <select
+                  value={
+                    group.loop || ((group.repeat ?? 1) > 1 ? "count" : "once")
                   }
-                />{" "}
-                Loop this light group
+                  onChange={(e) =>
+                    groupPatch(i, {
+                      loop:
+                        e.target.value === "next-challenge" ||
+                        e.target.value === "replaced"
+                          ? e.target.value
+                          : undefined,
+                      repeat: e.target.value === "count" ? 2 : 1,
+                    })
+                  }
+                >
+                  <option value="once">Play once</option>
+                  <option value="count">Repeat a set number of times</option>
+                  <option value="next-challenge">
+                    Loop until the next challenge is solved
+                  </option>
+                  <option value="replaced">
+                    Loop until another transition takes over a light
+                  </option>
+                </select>
               </label>
-              {(group.repeat ?? 1) > 1 && (
+              {group.loop && (
+                <p>
+                  Runs in the background so players can continue. A transition
+                  affecting any light in this group stops the whole group.
+                  Pausing or closing the game also stops it.
+                </p>
+              )}
+              {!group.loop && (group.repeat ?? 1) > 1 && (
                 <label>
                   Total repeats (including the first play)
                   <input
@@ -283,11 +311,6 @@ export function LightTransitionEditor({
                       groupPatch(i, { repeat: Number(e.target.value) })
                     }
                   />
-                  <small>
-                    This group repeats independently. The next action runs after
-                    all groups finish. Pausing or closing the game stops
-                    playback.
-                  </small>
                 </label>
               )}
               <EntityPicker
