@@ -76,14 +76,15 @@ nav {
   gap: 8px;
   flex: 1;
 }
-nav button {
+nav a {
+  text-decoration: none;
   border: 0;
   background: transparent;
   padding: 10px 14px;
   border-radius: 7px;
   color: inherit;
 }
-nav button[aria-current] {
+nav a[aria-current] {
   background: #e7eddf;
 }
 .admin-shell main {

@@ -17,6 +17,10 @@ import { Route as SecretadminRouteImport } from './routes/secretadmin'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as ApiCallbackRouteImport } from './routes/api.callback'
 import { Route as ApiGameRouteImport } from './routes/api.game'
+import { Route as SecretadminIndexRouteImport } from './routes/secretadmin.index'
+import { Route as SecretadminGameRouteImport } from './routes/secretadmin.game'
+import { Route as SecretadminSessionsRouteImport } from './routes/secretadmin.sessions'
+import { Route as SecretadminSettingsRouteImport } from './routes/secretadmin.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,26 +62,53 @@ const ApiGameRoute = ApiGameRouteImport.update({
   path: '/api/game',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecretadminIndexRoute = SecretadminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SecretadminRoute,
+} as any)
+const SecretadminGameRoute = SecretadminGameRouteImport.update({
+  id: '/game',
+  path: '/game',
+  getParentRoute: () => SecretadminRoute,
+} as any)
+const SecretadminSessionsRoute = SecretadminSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => SecretadminRoute,
+} as any)
+const SecretadminSettingsRoute = SecretadminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SecretadminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
-  '/secretadmin': typeof SecretadminRoute
+  '/secretadmin': typeof SecretadminRouteWithChildren
   '/sessions': typeof SessionsRoute
   '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
+  '/secretadmin/game': typeof SecretadminGameRoute
+  '/secretadmin/sessions': typeof SecretadminSessionsRoute
+  '/secretadmin/settings': typeof SecretadminSettingsRoute
+  '/secretadmin/': typeof SecretadminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
-  '/secretadmin': typeof SecretadminRoute
   '/sessions': typeof SessionsRoute
   '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
+  '/secretadmin/game': typeof SecretadminGameRoute
+  '/secretadmin/sessions': typeof SecretadminSessionsRoute
+  '/secretadmin/settings': typeof SecretadminSettingsRoute
+  '/secretadmin': typeof SecretadminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,10 +116,14 @@ export interface FileRoutesById {
   '/areas': typeof AreasRoute
   '/integrations': typeof IntegrationsRoute
   '/play': typeof PlayRoute
-  '/secretadmin': typeof SecretadminRoute
+  '/secretadmin': typeof SecretadminRouteWithChildren
   '/sessions': typeof SessionsRoute
   '/api/callback': typeof ApiCallbackRoute
   '/api/game': typeof ApiGameRoute
+  '/secretadmin/game': typeof SecretadminGameRoute
+  '/secretadmin/sessions': typeof SecretadminSessionsRoute
+  '/secretadmin/settings': typeof SecretadminSettingsRoute
+  '/secretadmin/': typeof SecretadminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,16 +136,23 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/api/callback'
     | '/api/game'
+    | '/secretadmin/game'
+    | '/secretadmin/sessions'
+    | '/secretadmin/settings'
+    | '/secretadmin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/areas'
     | '/integrations'
     | '/play'
-    | '/secretadmin'
     | '/sessions'
     | '/api/callback'
     | '/api/game'
+    | '/secretadmin/game'
+    | '/secretadmin/sessions'
+    | '/secretadmin/settings'
+    | '/secretadmin'
   id:
     | '__root__'
     | '/'
@@ -121,6 +163,10 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/api/callback'
     | '/api/game'
+    | '/secretadmin/game'
+    | '/secretadmin/sessions'
+    | '/secretadmin/settings'
+    | '/secretadmin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,7 +174,7 @@ export interface RootRouteChildren {
   AreasRoute: typeof AreasRoute
   IntegrationsRoute: typeof IntegrationsRoute
   PlayRoute: typeof PlayRoute
-  SecretadminRoute: typeof SecretadminRoute
+  SecretadminRoute: typeof SecretadminRouteWithChildren
   SessionsRoute: typeof SessionsRoute
   ApiCallbackRoute: typeof ApiCallbackRoute
   ApiGameRoute: typeof ApiGameRoute
@@ -192,15 +238,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/secretadmin/': {
+      id: '/secretadmin/'
+      path: '/'
+      fullPath: '/secretadmin/'
+      preLoaderRoute: typeof SecretadminIndexRouteImport
+      parentRoute: typeof SecretadminRoute
+    }
+    '/secretadmin/game': {
+      id: '/secretadmin/game'
+      path: '/game'
+      fullPath: '/secretadmin/game'
+      preLoaderRoute: typeof SecretadminGameRouteImport
+      parentRoute: typeof SecretadminRoute
+    }
+    '/secretadmin/sessions': {
+      id: '/secretadmin/sessions'
+      path: '/sessions'
+      fullPath: '/secretadmin/sessions'
+      preLoaderRoute: typeof SecretadminSessionsRouteImport
+      parentRoute: typeof SecretadminRoute
+    }
+    '/secretadmin/settings': {
+      id: '/secretadmin/settings'
+      path: '/settings'
+      fullPath: '/secretadmin/settings'
+      preLoaderRoute: typeof SecretadminSettingsRouteImport
+      parentRoute: typeof SecretadminRoute
+    }
   }
 }
+
+interface SecretadminRouteChildren {
+  SecretadminGameRoute: typeof SecretadminGameRoute
+  SecretadminSessionsRoute: typeof SecretadminSessionsRoute
+  SecretadminSettingsRoute: typeof SecretadminSettingsRoute
+  SecretadminIndexRoute: typeof SecretadminIndexRoute
+}
+
+const SecretadminRouteChildren: SecretadminRouteChildren = {
+  SecretadminGameRoute: SecretadminGameRoute,
+  SecretadminSessionsRoute: SecretadminSessionsRoute,
+  SecretadminSettingsRoute: SecretadminSettingsRoute,
+  SecretadminIndexRoute: SecretadminIndexRoute,
+}
+
+const SecretadminRouteWithChildren = SecretadminRoute._addFileChildren(
+  SecretadminRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AreasRoute: AreasRoute,
   IntegrationsRoute: IntegrationsRoute,
   PlayRoute: PlayRoute,
-  SecretadminRoute: SecretadminRoute,
+  SecretadminRoute: SecretadminRouteWithChildren,
   SessionsRoute: SessionsRoute,
   ApiCallbackRoute: ApiCallbackRoute,
   ApiGameRoute: ApiGameRoute,

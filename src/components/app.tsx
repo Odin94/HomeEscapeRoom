@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useLocation } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
 import { GameEditor, ChallengeInput } from "./game-editor";
@@ -22,14 +22,20 @@ async function api(body?: unknown) {
   return result;
 }
 export function App() {
-  const adminPage = useLocation().pathname.startsWith("/secretadmin");
+  const pathname = useLocation().pathname;
+  const adminPage = pathname.startsWith("/secretadmin");
+  const tab =
+    pathname === "/secretadmin/game"
+      ? "Games"
+      : pathname === "/secretadmin/settings"
+        ? "Settings"
+        : "Sessions";
   const [store] = useState(createGameStore);
   const state = useStore(store, (value) => value.state);
   const setState = useStore(store, (value) => value.setState);
   const [toast, setToast] = useState("");
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState("Sessions");
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState("");
   const [creatingGame, setCreatingGame] = useState(false);
@@ -154,14 +160,20 @@ export function App() {
             Threshold
           </a>
           <nav>
-            {["Sessions", "Games", "Settings"].map((t) => (
-              <button
-                key={t}
-                aria-current={tab === t ? "page" : undefined}
-                onClick={() => setTab(t)}
+            {(
+              [
+                ["Sessions", "/secretadmin/sessions"],
+                ["Games", "/secretadmin/game"],
+                ["Settings", "/secretadmin/settings"],
+              ] as const
+            ).map(([label, to]) => (
+              <Link
+                key={to}
+                to={to}
+                aria-current={tab === label ? "page" : undefined}
               >
-                {t}
-              </button>
+                {label}
+              </Link>
             ))}
           </nav>
           <a
