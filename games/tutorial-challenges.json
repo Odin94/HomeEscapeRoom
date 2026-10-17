@@ -1,0 +1,65 @@
+{
+  "id": "tutorial-challenges",
+  "name": "Challenge workshop",
+  "areas": [
+    {
+      "id": "challenge-1",
+      "name": "Room 1",
+      "kind": "text",
+      "hint": "Solve the challenge to continue.",
+      "description": "The next room opens.",
+      "unlockCode": "raven",
+      "playerView": "narrative"
+    },
+    {
+      "id": "challenge-2",
+      "name": "Room 2",
+      "kind": "numbers",
+      "hint": "Solve the challenge to continue.",
+      "description": "The next room opens.",
+      "unlockCode": "0042",
+      "playerView": "narrative"
+    },
+    {
+      "id": "challenge-3",
+      "name": "Room 3",
+      "kind": "colors",
+      "hint": "Solve the challenge to continue.",
+      "description": "The next room opens.",
+      "unlockCode": "#ff0000|#0000ff|#ff0000",
+      "playerView": "narrative",
+      "choices": ["#ff0000", "#0000ff"]
+    },
+    {
+      "id": "challenge-4",
+      "name": "Room 4",
+      "kind": "symbols",
+      "hint": "Solve the challenge to continue.",
+      "description": "The next room opens.",
+      "unlockCode": "star|moon|star",
+      "playerView": "narrative",
+      "choices": ["star", "moon"]
+    },
+    {
+      "id": "challenge-5",
+      "name": "Room 5",
+      "kind": "qr",
+      "hint": "Solve the challenge to continue.",
+      "description": "The next room opens.",
+      "unlockCode": "tutorial-prompted-marker",
+      "playerView": "narrative",
+      "qrMode": "prompted"
+    },
+    {
+      "id": "challenge-6",
+      "name": "Room 6",
+      "kind": "qr",
+      "hint": "",
+      "description": "The next room opens.",
+      "unlockCode": "tutorial-hidden-marker",
+      "playerView": "narrative",
+      "qrMode": "hidden"
+    }
+  ],
+  "controls": []
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
+import { GameEditor, ChallengeInput } from "./game-editor";
 import { useStore } from "zustand";
 import { createGameStore, type Game, type State } from "../lib/game-store";
 async function api(body?: unknown) {
@@ -348,32 +349,17 @@ export function App() {
                       narrative.
                     </p>
                     {editor && (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          try {
-                            void act(
-                              { action: "save-game", game: JSON.parse(editor) },
-                              "Game saved",
-                            );
-                          } catch {
-                            setFailed(true);
-                            setToast("Enter valid JSON");
-                          }
-                        }}
-                      >
-                        <label>
-                          Game JSON
-                          <textarea
-                            rows={22}
-                            value={editor}
-                            onChange={(e) => setEditor(e.target.value)}
-                            spellCheck={false}
-                            required
-                          />
-                        </label>
-                        <Button disabled={busy}>Save game</Button>
-                      </form>
+                      <GameEditor
+                        key={editor}
+                        initial={JSON.parse(editor)}
+                        busy={busy}
+                        save={(draft) =>
+                          act(
+                            { action: "save-game", game: draft },
+                            "Game saved",
+                          )
+                        }
+                      />
                     )}
                   </section>
                   {game?.areas.map((a) => (
@@ -571,23 +557,13 @@ export function App() {
                 {state.areas[state.player.session.progress]?.hint && (
                   <p>{state.areas[state.player.session.progress].hint}</p>
                 )}
-                <label>
-                  {state.areas[state.player.session.progress]?.kind ===
-                  "password"
-                    ? "Password"
-                    : "Code"}
-                  <input
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    required
-                    autoComplete="off"
-                  />
-                </label>
-                <Button
+                <ChallengeInput
+                  key={`${state.player.session_id}-${state.player.session.progress}`}
+                  area={state.areas[state.player.session.progress]}
+                  code={code}
+                  setCode={setCode}
                   disabled={busy || state.player.session.status !== "running"}
-                >
-                  Unlock
-                </Button>
+                />
               </form>
             )}
             <Button variant="ghost" onClick={() => act({ action: "leave" })}>

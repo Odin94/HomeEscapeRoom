@@ -112,7 +112,16 @@ export async function handle(request: Request) {
             ? { ...area, unlockCode: area.unlockCode }
             : {
                 id: area.id,
-                kind: area.kind,
+                kind:
+                  area.kind === "qr" && area.qrMode !== "prompted"
+                    ? "hidden"
+                    : area.kind,
+                ...(p && index === session(p.session_id).progress
+                  ? { choices: area.choices }
+                  : {}),
+                ...(area.kind === "qr" && area.qrMode === "prompted"
+                  ? { qrMode: "prompted" }
+                  : {}),
                 playerView: area.playerView,
                 name:
                   p && index < session(p.session_id).progress

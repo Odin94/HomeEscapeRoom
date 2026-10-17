@@ -414,3 +414,52 @@ test("game snapshots isolate sessions and settings remain private", async () => 
     "http://threshold.home.arpa:3000",
   );
 });
+
+test("all challenge types progress through API without exposing answers or hidden QR prompts", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const created = await (
+    await call(
+      { action: "create", gameId: "tutorial-challenges", name: "Workshop" },
+      gm,
+    )
+  ).json();
+  const joined = await call({ action: "join", id: created.id, name: "Solver" });
+  const player = joined.headers.get("set-cookie")!.split(";")[0];
+  await call({ action: "status", id: created.id, status: "running" }, gm);
+  const answers = [
+    "raven",
+    "0042",
+    "#ff0000|#0000ff|#ff0000",
+    "star|moon|star",
+    "tutorial-prompted-marker",
+    "tutorial-hidden-marker",
+  ];
+  for (let i = 0; i < answers.length; i++) {
+    const state = await (await call(undefined, player)).json();
+    assert.equal(state.player.session.progress, i);
+    assert.ok(
+      state.areas.every(
+        (a: Record<string, unknown>) => a.unlockCode === undefined,
+      ),
+    );
+    assert.ok(!JSON.stringify(state).includes("tutorial-hidden-marker"));
+    if (i === 2 || i === 3) assert.equal(state.areas[i].choices.length, 2);
+    if (i === 4) {
+      assert.equal(state.areas[i].kind, "qr");
+      assert.equal(state.areas[i].qrMode, "prompted");
+    }
+    if (i === 5) {
+      assert.equal(state.areas[i].kind, "hidden");
+      assert.equal(state.areas[i].hint, "");
+    }
+    assert.equal(
+      (await call({ action: "unlock", code: "wrong" }, player)).status,
+      400,
+    );
+    assert.equal(
+      (await call({ action: "unlock", code: answers[i] }, player)).status,
+      200,
+    );
+  }
+});

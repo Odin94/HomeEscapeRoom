@@ -6,10 +6,12 @@ export type Game = {
   areas: Area[];
   controls: { id: string; name: string; entity: string }[];
 };
-type Area = {
+export type Area = {
   id: string;
   name: string;
   kind: string;
+  qrMode?: "prompted" | "hidden";
+  choices?: string[];
   hint: string;
   description: string;
   unlockCode?: string;

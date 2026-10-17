@@ -109,3 +109,19 @@ Existing QR codes containing numeric IPs cannot be changed by adding DNS. Preser
 A simpler alternative is the Mac's local hostname, e.g. `http://threshold-mac.local:3000` (System Settings → General → Sharing → Local hostname). Test on every phone before printing because multicast DNS depends on the network.
 
 References: [Apple local hostnames](https://support.apple.com/en-is/guide/mac-help/mchlp2322/mac), [Home Assistant LAN DNS setup](https://companion.home-assistant.io/docs/troubleshooting/networking/), [Home Assistant Dnsmasq](https://github.com/home-assistant/addons/blob/master/dnsmasq/DOCS.md).
+
+### Creating games and challenge rules
+
+In `/secretadmin`, open **Games**, then **New game** or **Edit definition**.
+The form configures ordered challenges and Home Assistant controls. Save writes
+`games/<id>.json`; commit these files to keep definitions in Git. Saving an existing
+ID replaces that definition. Sessions retain their original snapshots.
+`games/tutorial-challenges.json` demonstrates every supported challenge.
+
+- Games contain 1–30 challenges with unique lowercase slug IDs and names of 1–80 characters. Unknown fields and challenge types are rejected.
+- Text answers ignore case and surrounding whitespace. `password` remains a legacy alias for text.
+- Number answers contain only digits and preserve leading zeroes.
+- Color and symbol challenges offer 2–12 unique choices and require an ordered answer of 2–20 choices separated by `|`. Repetitions are allowed. Choices cannot contain `|`; colors use six-digit hex values such as `#ff0000`.
+- QR challenges use an exact, case-sensitive token. `qrMode: "prompted"` offers a camera/photo input in the app, decoded locally; players can also open the printed link with their phone camera. `qrMode: "hidden"` shows no scanner or hint: players discover and scan the physical marker externally, then confirm Unlock. Omitted QR mode retains legacy hidden behavior. Generate printable markers with **Show QR** in admin.
+- Hints are limited to 1,000 characters, revealed story text to 10,000, and answers to 256. Hidden QR challenges cannot have hints. Answers never appear in player API responses.
+- Up to 50 Home Assistant controls may be configured, with unique slug IDs and `light.*`, `scene.*`, or `script.*` entity IDs.
