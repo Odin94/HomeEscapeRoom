@@ -2,41 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
-import { usePlayerStore } from "../lib/player-store";
-type Game = {
-  id: string;
-  name: string;
-  areas: Area[];
-  controls: { id: string; name: string; entity: string }[];
-};
-type Area = {
-  id: string;
-  name: string;
-  kind: string;
-  hint: string;
-  description: string;
-  unlockCode?: string;
-  playerView?: string;
-};
-type Session = {
-  id: string;
-  name: string;
-  status: string;
-  progress: number;
-  players?: number;
-};
-type State = {
-  admin: boolean;
-  adminConfigured: boolean;
-  shareOrigin?: string | null;
-  demo: boolean;
-  sessions: Session[];
-  games?: Game[];
-  areas: Area[];
-  settings?: { haUrl: string; tokenConfigured: boolean; publicUrl: string };
-  player: { name: string; session_id: string; session: Session } | null;
-  events?: { id: number; message: string; created: string }[];
-};
+import { useStore } from "zustand";
+import { createGameStore, type Game, type State } from "../lib/game-store";
 async function api(body?: unknown) {
   const response = await fetch(
     "/api/game",
@@ -54,7 +21,9 @@ async function api(body?: unknown) {
 }
 export function App() {
   const adminPage = useLocation().pathname.startsWith("/secretadmin");
-  const [state, setState] = useState<State>();
+  const [store] = useState(createGameStore);
+  const state = useStore(store, (value) => value.state);
+  const setState = useStore(store, (value) => value.setState);
   const [toast, setToast] = useState("");
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -67,21 +36,19 @@ export function App() {
   const refresh = useCallback(async () => {
     try {
       const next: State = await api();
-      usePlayerStore
-        .getState()
-        .sync(
-          next.player && !next.admin
-            ? { player: next.player, areas: next.areas }
-            : null,
-        );
       setState(next);
     } catch (e) {
       setFailed(true);
       setToast((e as Error).message);
     }
-  }, []);
+  }, [setState]);
   useEffect(() => {
-    void usePlayerStore.persist.rehydrate();
+    // Clean up the previous client cache; gameplay no longer uses localStorage.
+    try {
+      localStorage.removeItem("threshold-player");
+    } catch {
+      // Storage may be disabled; the server and cookie own persistence.
+    }
     void refresh();
     const timer = setInterval(refresh, 3000);
     const resume = () => {

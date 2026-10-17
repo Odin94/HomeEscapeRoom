@@ -49,19 +49,61 @@ Keep `games/` and `drizzle/` beside the built app, run from the project root and
 
 ## Returning players and permanent QR markers
 
-Player identity uses an HttpOnly cookie lasting up to one year; shared progress remains in SQLite. A typed Zustand store caches the player view in localStorage under `threshold-player`. Reopening checks membership and progress with the server before showing gameplay. Local data cannot unlock areas. Use the same browser and origin; clearing cookies, private browsing or changing hostnames loses that browser identity.
+Player identity uses an HttpOnly cookie lasting up to one year; shared progress remains in SQLite. Zustand manages current API state in memory without localStorage persistence. Reopening fetches current membership and progress from the server. Use the same browser and origin; clearing cookies, private browsing or changing hostnames loses that browser identity. The old `threshold-player` localStorage cache is removed when the app opens.
 
-Connected pages poll every three seconds and refresh on window focus. End revokes the session's player credentials and clears local snapshots on the next successful refresh. Closed browsers reconcile when reopened. Joining another session replaces the previous snapshot. Reopening an ended session does not restore revoked memberships.
+Connected pages poll every three seconds and refresh on window focus. End revokes the session's player credentials and returns players to joining on the next successful refresh. Closed browsers reconcile when reopened. Joining another session replaces the previous membership. Reopening an ended session does not restore revoked memberships.
 
 For permanent printouts, set **Settings → Public game URL**, e.g. `http://threshold.home.arpa:3000`. All join links and room QR codes use this origin even when admin uses localhost. Blank restores LAN IP detection. Optional `PUBLIC_URL` supplies the default. This setting generates links; it does not configure DNS.
 
-1. Reserve the MacBook's Wi-Fi IP in your router's DHCP settings.
-2. Add a local DNS record `threshold.home.arpa` pointing to that reserved MacBook IP.
-3. If your router lacks local DNS, run AdGuard Home or Dnsmasq on the Home Assistant machine. Reserve its IP too and configure the router's DHCP DNS server to use it. The game hostname must point to the **MacBook**, where Threshold runs.
-4. Test the exact public URL and QR codes on phones before printing. Keep the hostname, port and game unlock codes stable; preserve server data.
+### 1. Find the router and reserve the MacBook address
 
-Being powered on 24/7 does not guarantee a fixed DHCP address. Home Assistant needs a configured DNS service; its web address does not automatically proxy Threshold. The Mac must remain awake with Threshold running. Phones must use the LAN DNS; custom DNS and VPNs can bypass it.
+Examples below use router `192.168.1.1`, MacBook `192.168.1.50`, and Home Assistant `192.168.1.20`. Substitute addresses from your own network. Router menu names vary by manufacturer.
 
-A simpler alternative is the Mac's local hostname, e.g. `http://threshold-mac.local:3000` (System Settings → General → Sharing → Local hostname). Test on all phones before printing because multicast DNS depends on the network. Existing QR codes containing numeric IPs cannot be changed through DNS: retain their original IP/port or reprint once. Marker codes work across sessions as long as the game's unlock codes stay unchanged.
+1. Connect the MacBook to the game Wi-Fi. Open **System Settings → Wi-Fi → Details → TCP/IP** and note its IPv4 address and **Router** address.
+2. Open the router address in a browser and sign in with its administrator credentials. These may differ from the Wi-Fi password; check its label or your provider's router instructions.
+3. Find **LAN / Home network → DHCP / Address reservations**, sometimes called **Static leases**, **DHCP binding**, or **Always assign the same IPv4 address**. Select the MacBook from connected devices and reserve its current address, or another unused address allowed by the router's reservation UI. Leave the Mac configured to obtain its address through DHCP.
+4. Reservations identify the network adapter by its MAC address. If using a private Wi-Fi address, keep it stable for this home network (choose **Fixed** rather than **Rotating**, where available). Ethernet has a separate adapter; reserve that instead if you will host over Ethernet.
+5. Save/apply, reconnect Wi-Fi or renew the DHCP lease if needed, and confirm the Mac has its reserved address. Run `pnpm dev` and open `http://<reserved-Mac-IP>:3000/` on a phone on the same Wi-Fi. Get this working before configuring DNS.
+
+### 2. Create a hostname in your router
+
+Look for **Local DNS**, **DNS records**, **Host overrides**, or **DNS host mapping**. Add an **A record**:
+
+| Field        | Example value                            |
+| ------------ | ---------------------------------------- |
+| Hostname     | `threshold.home.arpa`                    |
+| IPv4 address | `192.168.1.50` (the reserved MacBook IP) |
+
+DNS records contain no protocol, port or path. If the UI separates host and domain, enter `threshold` and `home.arpa`. Save/apply. Some routers support only their own suffix; use the full hostname your router supports instead. A DHCP device label alone does not guarantee a DNS record.
+
+Check **LAN → DHCP → DNS server**: clients should use the router's own address when it provides local DNS. The **WAN / Internet upstream DNS** setting is a different setting and may not configure clients. Reconnect phones to Wi-Fi to pick up changes. If the router lacks local DNS records, use the Home Assistant option below; otherwise go to step 3.
+
+### Optional: use Home Assistant as the DNS server
+
+Being powered on 24/7 does not guarantee a fixed DHCP IP. Home Assistant needs an IP reservation and an installed DNS service. Its usual web address does not automatically proxy Threshold.
+
+On a Home Assistant installation supporting apps/add-ons, install **AdGuard Home** from the app/add-on store (the community repository may need to be enabled). The AdGuard integration alone does not install the DNS server. Dnsmasq is another option; its configuration reference is linked below.
+
+1. Reserve Home Assistant's IP in the router, just as for the MacBook.
+2. Start AdGuard Home, enable starting on boot and open its web UI. Follow its setup instructions to listen for DNS on the Home Assistant LAN address, port 53; resolve any port conflict before continuing.
+3. Find **DNS rewrites**, usually under **Filters** depending on version. Add `threshold.home.arpa` pointing to the reserved **MacBook IP**. Home Assistant provides DNS; the MacBook runs the game.
+4. From the Mac, test `nslookup threshold.home.arpa 192.168.1.20`, using your Home Assistant IP. The answer must contain the MacBook IP. Also test `nslookup example.com 192.168.1.20` to confirm ordinary names resolve before switching clients.
+5. Record the router's previous DNS settings. In **LAN → DHCP → DNS server**, advertise the Home Assistant IP. Leave the gateway and DHCP server unchanged; do not enable another DHCP server in AdGuard. Avoid a public DNS server as secondary because clients may use it and fail to resolve the game hostname. If your router requires its own DNS proxy, configure its upstream to Home Assistant instead, ensuring AdGuard does not forward back to the router in a loop.
+6. Reconnect phones to Wi-Fi to renew their DNS settings. If the router cannot advertise a DNS server, manually configure each game phone's Wi-Fi DNS to use the Home Assistant IP. On iOS use **Configure DNS → Manual**; Android network settings vary and may require manual network configuration. Android's **Private DNS provider hostname** field is not a field for a LAN IP.
+
+Home Assistant must stay available for DNS lookups. Restore the previous router DNS settings and reconnect clients to undo this configuration. VPNs, custom DNS and browser secure-DNS settings may bypass LAN DNS; check these when a phone cannot resolve the local hostname.
+
+### 3. Test the URL, save it and print
+
+1. On the Mac, run `nslookup threshold.home.arpa`. Check the **answer address**, not just the DNS server address: it must be the MacBook IP. If an explicit query to Home Assistant worked but this query fails, the client is using the wrong DNS server; check its DNS settings or reconnect.
+2. On every game phone, open `http://threshold.home.arpa:3000/` with the explicit protocol and port. If the numeric IP works but the hostname does not, investigate DNS. If neither works, check the running server, Mac sleep, firewall and Wi-Fi client isolation. No Internet port forwarding is needed.
+3. Sign in at `/secretadmin`, open **Settings**, enter that exact origin in **Public game URL**, then save. Generate a join QR and room markers under **Games**. Scan with the phone's regular camera/browser, join a test session, start it and unlock an area. Close the tab and reopen the same URL to verify progress returns.
+4. End the test session and verify the phone returns to joining after refresh. When convenient, restart the Mac/router and repeat hostname access to confirm reservations and DNS survived. Then print.
+
+Keep the hostname, port and game unlock codes stable; preserve `data/`. Use this hostname consistently on phones: cookies for a numeric IP or another hostname do not transfer. If hosting later moves, update DNS to the new host's reserved IP and move server data; printed hostname links can remain unchanged. When using `pnpm start`, keep port 3000 (set `PORT=3000` if needed).
+
+Existing QR codes containing numeric IPs cannot be changed by adding DNS. Preserve their original IP/port or reprint once with the hostname. Marker links work across sessions as long as game unlock codes stay unchanged.
+
+A simpler alternative is the Mac's local hostname, e.g. `http://threshold-mac.local:3000` (System Settings → General → Sharing → Local hostname). Test on every phone before printing because multicast DNS depends on the network.
 
 References: [Apple local hostnames](https://support.apple.com/en-is/guide/mac-help/mchlp2322/mac), [Home Assistant LAN DNS setup](https://companion.home-assistant.io/docs/troubleshooting/networking/), [Home Assistant Dnsmasq](https://github.com/home-assistant/addons/blob/master/dnsmasq/DOCS.md).
