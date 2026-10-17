@@ -899,24 +899,26 @@ function SessionAutomation({
           {r.status}: {r.error || "Waiting for action completion"}
         </p>
       ))}
-      {runs.length > 0 && (
+      <div className="actions">
+        {runs.length > 0 && (
+          <Button
+            disabled={busy || runs.some((r) => r.status === "running")}
+            onClick={() => void act({ action: "retry-actions", id })}
+          >
+            Retry failed actions
+          </Button>
+        )}
         <Button
-          disabled={busy || runs.some((r) => r.status === "running")}
-          onClick={() => void act({ action: "retry-actions", id })}
+          variant="outline"
+          onClick={() => {
+            void api({ action: "callback-config", id })
+              .then(setConfig)
+              .catch((e) => setError(e.message));
+          }}
         >
-          Retry failed actions
+          Show callback configuration
         </Button>
-      )}
-      <Button
-        variant="outline"
-        onClick={() => {
-          void api({ action: "callback-config", id })
-            .then(setConfig)
-            .catch((e) => setError(e.message));
-        }}
-      >
-        Show callback configuration
-      </Button>
+      </div>
       {error && <p role="alert">{error}</p>}
       {config && (
         <>

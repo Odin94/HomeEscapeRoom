@@ -48,6 +48,7 @@ h2 {
   font-size: 1.3rem;
 }
 p {
+  margin-block: 0.75em;
   line-height: 1.7;
   color: #59665c;
 }
@@ -171,8 +172,41 @@ textarea {
 }
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: center;
   flex-wrap: wrap;
+}
+.game-editor,
+.game-editor fieldset,
+.editor-item {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.game-editor {
+  margin-top: 24px;
+}
+.game-editor fieldset {
+  padding-block: 12px;
+}
+.game-editor legend {
+  padding-bottom: 8px;
+  font-weight: 600;
+}
+.game-editor label,
+.game-editor p {
+  margin: 0;
+}
+.game-editor .button {
+  justify-self: start;
+}
+.editor-item + .editor-item {
+  padding-top: 20px;
+  border-top: 1px solid #e2e7dc;
+}
+.answer-sequence {
+  display: block;
+  margin-block: 16px;
 }
 .session-grid {
   display: grid;
@@ -374,7 +408,15 @@ textarea {
     font-size: 2.1rem;
   }
   .row {
-    display: block;
+    gap: 16px;
+  }
+  .row label {
+    flex-basis: 100%;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+  .row > .button {
+    margin-bottom: 0;
   }
   .button {
     font-size: 1rem;

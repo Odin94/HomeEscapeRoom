@@ -29,6 +29,7 @@ export function GameEditor({
     });
   return (
     <form
+      className="game-editor"
       onSubmit={(e) => {
         e.preventDefault();
         void save(game);
@@ -204,7 +205,7 @@ export function GameEditor({
               all four lights.
             </p>
             {(a.onComplete || []).map((action, n) => (
-              <div key={n}>
+              <div className="editor-item" key={n}>
                 {action.type === "control" ? (
                   <>
                     <label>
@@ -296,40 +297,42 @@ export function GameEditor({
                 </Button>
               </div>
             ))}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={(a.onComplete?.length || 0) >= 10}
-              onClick={() =>
-                patch(i, {
-                  onComplete: [
-                    ...(a.onComplete || []),
-                    {
-                      type: "control",
-                      controlId: game.controls[0]?.id || "",
-                      on: true,
-                    },
-                  ],
-                })
-              }
-            >
-              Add scene / script / light action
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={(a.onComplete?.length || 0) >= 10}
-              onClick={() =>
-                patch(i, {
-                  onComplete: [
-                    ...(a.onComplete || []),
-                    { type: "speech", entity: "", message: "" },
-                  ],
-                })
-              }
-            >
-              Add Alexa speech
-            </Button>
+            <div className="actions">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={(a.onComplete?.length || 0) >= 10}
+                onClick={() =>
+                  patch(i, {
+                    onComplete: [
+                      ...(a.onComplete || []),
+                      {
+                        type: "control",
+                        controlId: game.controls[0]?.id || "",
+                        on: true,
+                      },
+                    ],
+                  })
+                }
+              >
+                Add scene / script / light action
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={(a.onComplete?.length || 0) >= 10}
+                onClick={() =>
+                  patch(i, {
+                    onComplete: [
+                      ...(a.onComplete || []),
+                      { type: "speech", entity: "", message: "" },
+                    ],
+                  })
+                }
+              >
+                Add Alexa speech
+              </Button>
+            </div>
           </fieldset>
           {a.kind === "external" && (
             <p>
@@ -337,28 +340,33 @@ export function GameEditor({
               callback under the session Automation section.
             </p>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={i === 0}
-            onClick={() => {
-              const areas = [...game.areas];
-              [areas[i - 1], areas[i]] = [areas[i], areas[i - 1]];
-              setGame({ ...game, areas });
-            }}
-          >
-            Move up
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={game.areas.length === 1}
-            onClick={() =>
-              setGame({ ...game, areas: game.areas.filter((_, n) => n !== i) })
-            }
-          >
-            Remove challenge
-          </Button>
+          <div className="actions">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={i === 0}
+              onClick={() => {
+                const areas = [...game.areas];
+                [areas[i - 1], areas[i]] = [areas[i], areas[i - 1]];
+                setGame({ ...game, areas });
+              }}
+            >
+              Move up
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={game.areas.length === 1}
+              onClick={() =>
+                setGame({
+                  ...game,
+                  areas: game.areas.filter((_, n) => n !== i),
+                })
+              }
+            >
+              Remove challenge
+            </Button>
+          </div>
         </fieldset>
       ))}
       <Button
@@ -388,7 +396,7 @@ export function GameEditor({
       <fieldset>
         <legend>Home Assistant controls</legend>
         {game.controls.map((control, i) => (
-          <div key={i}>
+          <div className="editor-item" key={i}>
             {(["id", "name", "entity"] as const).map((field) => (
               <label key={field}>
                 {field === "entity"
@@ -533,7 +541,7 @@ export function ChallengeInput({
       {["colors", "symbols"].includes(area.kind) ? (
         <>
           <p>Select the choices in order. Repeated choices are allowed.</p>
-          <div className="row">
+          <div className="actions">
             {area.choices?.map((choice) => (
               <Button
                 type="button"
@@ -555,17 +563,20 @@ export function ChallengeInput({
               </Button>
             ))}
           </div>
-          <output aria-live="polite">
+          <output className="answer-sequence" aria-live="polite">
             {code.split("|").filter(Boolean).join(" → ")}
           </output>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={disabled}
-            onClick={() => setCode("")}
-          >
-            Clear order
-          </Button>
+          <div className="actions">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={disabled}
+              onClick={() => setCode("")}
+            >
+              Clear order
+            </Button>
+            <Button disabled={disabled || !code}>Unlock</Button>
+          </div>
         </>
       ) : area.kind !== "qr" && !hidden ? (
         <label>
@@ -582,7 +593,9 @@ export function ChallengeInput({
           />
         </label>
       ) : null}
-      <Button disabled={disabled || !code}>Unlock</Button>
+      {!["colors", "symbols"].includes(area.kind) && (
+        <Button disabled={disabled || !code}>Unlock</Button>
+      )}
     </>
   );
 }
