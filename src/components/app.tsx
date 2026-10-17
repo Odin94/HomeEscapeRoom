@@ -32,6 +32,7 @@ export function App() {
   const [tab, setTab] = useState("Sessions");
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState("");
+  const [creatingGame, setCreatingGame] = useState(false);
   const [qr, setQr] = useState("");
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
   const [joinSession, setJoinSession] = useState("");
@@ -354,13 +355,17 @@ export function App() {
                         </select>
                       </label>
                       <Button
-                        onClick={() => setEditor(JSON.stringify(game, null, 2))}
+                        onClick={() => {
+                          setCreatingGame(false);
+                          setEditor(JSON.stringify(game, null, 2));
+                        }}
                       >
                         Edit definition
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() =>
+                        onClick={() => {
+                          setCreatingGame(true);
                           setEditor(
                             JSON.stringify(
                               {
@@ -382,8 +387,8 @@ export function App() {
                               null,
                               2,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       >
                         New game
                       </Button>
@@ -397,6 +402,7 @@ export function App() {
                       <GameEditor
                         key={editor}
                         initial={JSON.parse(editor)}
+                        isNew={creatingGame}
                         busy={busy}
                         save={(draft) =>
                           act(

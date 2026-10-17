@@ -11,14 +11,17 @@ const kinds = {
 };
 export function GameEditor({
   initial,
+  isNew = false,
   busy,
   save,
 }: {
   initial: Game;
+  isNew?: boolean;
   busy: boolean;
   save: (game: Game) => Promise<boolean>;
 }) {
   const [game, setGame] = useState(initial);
+  const [autoId, setAutoId] = useState(isNew);
   const patch = (index: number, value: Partial<Area>) =>
     setGame({
       ...game,
@@ -38,7 +41,10 @@ export function GameEditor({
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           maxLength={80}
           value={game.id}
-          onChange={(e) => setGame({ ...game, id: e.target.value })}
+          onChange={(e) => {
+            setAutoId(false);
+            setGame({ ...game, id: e.target.value });
+          }}
         />
       </label>
       <label>
@@ -47,7 +53,25 @@ export function GameEditor({
           required
           maxLength={80}
           value={game.name}
-          onChange={(e) => setGame({ ...game, name: e.target.value })}
+          onChange={(e) => {
+            const name = e.target.value;
+            setGame({
+              ...game,
+              name,
+              ...(autoId
+                ? {
+                    id: name
+                      .normalize("NFKD")
+                      .replace(/[\u0300-\u036f]/g, "")
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, "-")
+                      .replace(/^-+|-+$/g, "")
+                      .slice(0, 80)
+                      .replace(/-+$/g, ""),
+                  }
+                : {}),
+            });
+          }}
         />
       </label>
       <label>
