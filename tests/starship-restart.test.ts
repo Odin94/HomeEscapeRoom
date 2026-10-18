@@ -18,11 +18,9 @@ test("the SOS fragment is an independent text challenge unlocked by communicatio
   assert.match(challenge.hint, /second part.*emergencies/);
   assert.doesNotMatch(challenge.hint, /lamp|light|signal|morse|sos/i);
   assert.ok(
-    !availableChallenges(game, ["boot"]).some(
-      (area) => area.id === challenge.id,
-    ),
+    !availableChallenges(game, []).some((area) => area.id === challenge.id),
   );
-  const available = availableChallenges(game, ["boot", "comms"]);
+  const available = availableChallenges(game, ["comms"]);
   assert.ok(available.some((area) => area.id === challenge.id));
   assert.ok(available.some((area) => area.id === "maintenance-access"));
   assert.equal(nextUnlock(index, " SOS ", game), index + 1);
@@ -38,7 +36,7 @@ test("the SOS fragment is an independent text challenge unlocked by communicatio
   assert.match(html, /<input/);
   assert.match(html, /Unlock/);
   assert.ok(
-    !availableChallenges(game, ["boot", "comms", "distress"]).some(
+    !availableChallenges(game, ["comms", "distress"]).some(
       (area) => area.id === challenge.id,
     ),
   );
@@ -61,4 +59,24 @@ test("the distress lamp flashes SOS in red with its Morse timing intact", () => 
     [0.3, 0.3, 0.3, 0.9, 0.9, 0.9, 0.3, 0.3, 0.3],
   );
   assert.ok(pulses.every((step) => step.color === "#ff0000"));
+});
+
+test("the opening is a briefing and start effects, not a challenge or QR marker", () => {
+  assert.equal(game.joinChallengeId, undefined);
+  assert.ok(
+    !game.areas.some(
+      (area) =>
+        area.id === "boot" ||
+        area.unlockCode === "87073809-4f0d-4aa2-91a3-7c126bfe8346",
+    ),
+  );
+  assert.match(game.briefing!, /dark engine room/);
+  assert.deepEqual(
+    availableChallenges(game, []).map((area) => area.id),
+    ["flower", "stomp", "comms"],
+  );
+  assert.deepEqual(
+    game.onStart?.map((action) => action.type),
+    ["lights", "speech"],
+  );
 });

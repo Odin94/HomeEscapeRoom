@@ -41,6 +41,15 @@ export const gameSchema = z
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
     joinChallengeId: z.string().optional(),
+    briefing: z.string().max(10000).optional(),
+    onStart: z
+      .array(actionSchema)
+      .max(10)
+      .refine(
+        (actions) => actions.every((action) => action.type !== "timer"),
+        "Use the game time limit for the starting timer.",
+      )
+      .optional(),
     timeLimitMinutes: z.number().int().min(1).max(10080).optional(),
     clues: z.array(clueSchema).max(50).optional(),
     areas: z
@@ -189,17 +198,19 @@ export const gameSchema = z
         if (!clues.some((c) => c.id === id)) issue(`Unknown clue: ${id}`);
     }
     game.areas.forEach((_, index) => visit(index));
-    for (const area of game.areas)
-      for (const action of area.onComplete || []) {
-        if (
-          action.type === "control" &&
-          !game.controls.some((c) => c.id === action.controlId)
-        )
-          ctx.addIssue({
-            code: "custom",
-            message: `Unknown completion control: ${action.controlId}`,
-          });
-      }
+    for (const action of [
+      ...(game.onStart || []),
+      ...game.areas.flatMap((area) => area.onComplete || []),
+    ]) {
+      if (
+        action.type === "control" &&
+        !game.controls.some((c) => c.id === action.controlId)
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: `Unknown completion control: ${action.controlId}`,
+        });
+    }
   });
 export type Game = z.infer<typeof gameSchema>;
 const directory = () => resolve(process.env.GAMES_PATH || "games");

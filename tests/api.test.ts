@@ -840,7 +840,7 @@ test("persistent timers start, pause, extend once, replace, expire and stop on c
   }
 });
 
-test("joining Restart Ship activates its opening once and exposes themed session metadata", async () => {
+test("joining Restart Ship starts without an opening challenge and exposes themed session metadata", async () => {
   const login = await call({ action: "login", key: settings().adminKey });
   const gm = login.headers.get("set-cookie")!.split(";")[0];
   const { id } = await (
@@ -858,8 +858,12 @@ test("joining Restart Ship activates its opening once and exposes themed session
   assert.equal(joined.status, 200);
   const p = joined.headers.get("set-cookie")!.split(";")[0];
   const current = await (await call(undefined, p)).json();
-  assert.equal(current.player.session.progress, 1);
-  assert.deepEqual(current.storyOrder, ["boot"]);
+  assert.equal(current.player.session.progress, 0);
+  assert.deepEqual(current.storyOrder, []);
+  assert.match(current.briefing, /dark engine room/);
+  assert.ok(!current.areas.some((a: { id: string }) => a.id === "boot"));
+  for (const id of ["flower", "stomp", "comms"])
+    assert.ok(current.areas.find((a: { id: string }) => a.id === id).available);
   assert.ok(
     current.areas.filter((a: { kind: string }) => a.kind === "qr").length === 0,
   );
@@ -869,10 +873,10 @@ test("joining Restart Ship activates its opening once and exposes themed session
   );
   assert.equal(
     (await (await call(undefined, p)).json()).player.session.progress,
-    1,
+    0,
   );
   for (const [code, message] of [
-    ["87073809-4f0d-4aa2-91a3-7c126bfe8346", "already been used"],
+    ["87073809-4f0d-4aa2-91a3-7c126bfe8346", "not valid"],
     ["invalid-marker", "not valid"],
   ]) {
     const result = await call({ action: "unlock", code }, p);

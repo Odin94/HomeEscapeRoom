@@ -7,49 +7,10 @@
   "controls": [],
   "areas": [
     {
-      "id": "boot",
-      "name": "Emergency interface",
-      "kind": "qr",
-      "requires": [],
-      "hint": "",
-      "description": "Emergency interface online. You are in the dark engine room of a drifting spaceship. In 30 minutes, the ship will enter a meteor field. Restore power, communications and the engine before impact.",
-      "unlockCode": "87073809-4f0d-4aa2-91a3-7c126bfe8346",
-      "onComplete": [
-        {
-          "type": "lights",
-          "groups": [
-            {
-              "entities": [
-                "light.kitchen_k_spot_couch_door",
-                "light.kitchen_k_spot_couch_wall",
-                "light.kitchen_k_spot_kitchen_door",
-                "light.kitchen_k_spot_kitchen_wall"
-              ],
-              "steps": [
-                {
-                  "mode": "color",
-                  "color": "#ff6a00",
-                  "brightness": 5,
-                  "seconds": 0.1
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "speech",
-          "entity": "notify.living_room_echo_dot_speak",
-          "message": "Emergency boot complete. Main engines offline. Collision course with a meteor field confirmed. Thirty minutes until impact. Crew, restore emergency power, communications and engine access."
-        }
-      ],
-      "playerView": "narrative",
-      "qrMode": "hidden"
-    },
-    {
       "id": "flower",
       "name": "Engine password: first part",
       "kind": "text",
-      "requires": ["boot"],
+      "requires": [],
       "hint": "The first part of the engine password is a flower from the Westpark partner city. (4)",
       "description": "First engine credential accepted. Keep this word: it is the first of three parts. The engine restart terminal is now available.",
       "unlockCode": "hana",
@@ -66,7 +27,7 @@
       "id": "stomp",
       "name": "Emergency power",
       "kind": "qr",
-      "requires": ["boot"],
+      "requires": [],
       "hint": "Emergency power comes from a great stomp.",
       "description": "Emergency power restored. Emergency protocols are now in effect.",
       "unlockCode": "4b4a0185-b358-4183-a2cb-0f6df14e439f",
@@ -140,7 +101,7 @@
       "id": "comms",
       "name": "Emergency communications",
       "kind": "colors",
-      "requires": ["boot"],
+      "requires": [],
       "hint": "Enter the color combination to enable emergency communications.",
       "description": "Emergency communications online. A maintenance unit has been dispatched with access to another terminal.",
       "unlockCode": "#00ff00|#0000ff|#ffff00|#ff0000",
@@ -381,5 +342,33 @@
       "playerView": "narrative"
     }
   ],
-  "joinChallengeId": "boot"
+  "briefing": "Emergency interface online. You are in the dark engine room of a drifting spaceship. In 30 minutes, the ship will enter a meteor field. Restore power, communications and the engine before impact.",
+  "onStart": [
+    {
+      "type": "lights",
+      "groups": [
+        {
+          "entities": [
+            "light.kitchen_k_spot_couch_door",
+            "light.kitchen_k_spot_couch_wall",
+            "light.kitchen_k_spot_kitchen_door",
+            "light.kitchen_k_spot_kitchen_wall"
+          ],
+          "steps": [
+            {
+              "mode": "color",
+              "color": "#ff6a00",
+              "brightness": 5,
+              "seconds": 0.1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "speech",
+      "entity": "notify.living_room_echo_dot_speak",
+      "message": "Emergency boot complete. Main engines offline. Collision course with a meteor field confirmed. Thirty minutes until impact. Crew, restore emergency power, communications and engine access."
+    }
+  ]
 }

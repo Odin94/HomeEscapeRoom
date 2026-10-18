@@ -539,3 +539,100 @@ test(
     }
   },
 );
+
+test(
+  "start effects do not delay joining or scans and do not repeat on joins or resume",
+  { timeout: 3000 },
+  async () => {
+    const gm = (
+      await call({ action: "login", key: "automation-test-key" })
+    ).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    const originalFetch = globalThis.fetch;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let calls = 0;
+    try {
+      saveSettings({
+        haUrl: "http://ha.test",
+        haToken: "test-token",
+        adminKey: "automation-test-key",
+        publicUrl: "",
+      });
+      globalThis.fetch = async () => {
+        calls++;
+        started();
+        await held;
+        return Response.json([]);
+      };
+      const game = {
+        id: "start-effects",
+        name: "Start effects",
+        autoStart: true,
+        briefing: "Opening briefing",
+        onStart: [{ type: "control", controlId: "lamp" }],
+        controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+        areas: [
+          {
+            id: "access",
+            name: "Access",
+            kind: "qr",
+            requires: [],
+            hint: "",
+            description: "Connected",
+            unlockCode: "access-code",
+          },
+          {
+            id: "final",
+            name: "Final",
+            kind: "text",
+            hint: "",
+            description: "Finished",
+            unlockCode: "done",
+          },
+        ],
+      };
+      assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+      const { id } = await (
+        await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+      ).json();
+      const joined = await call({ action: "join", id, name: "Crew" });
+      await running;
+      const player = joined.headers.get("set-cookie")!.split(";")[0];
+      let state = await (await call(undefined, player)).json();
+      assert.equal(state.player.session.progress, 0);
+      assert.deepEqual(state.storyOrder, []);
+      assert.equal(state.briefing, "Opening briefing");
+      assert.equal(state.automationPending, true);
+      assert.equal(
+        (await call({ action: "unlock", code: "access-code" }, player)).status,
+        200,
+      );
+      assert.equal(
+        (await call({ action: "join", id, name: "Crew two" })).status,
+        200,
+      );
+      assert.equal(calls, 1);
+      release();
+      for (let tries = 0; tries < 20; tries++) {
+        state = await (await call(undefined, player)).json();
+        if (!state.automationPending) break;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      assert.equal(state.automationPending, false);
+      await call({ action: "status", id, status: "paused" }, gm);
+      await call({ action: "status", id, status: "running" }, gm);
+      assert.equal(calls, 1);
+    } finally {
+      release();
+      globalThis.fetch = originalFetch;
+    }
+  },
+);

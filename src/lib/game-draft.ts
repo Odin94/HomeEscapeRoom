@@ -7,6 +7,45 @@ import { vacuumDraftSchema } from "./vacuum";
 export const gameDraftKey = "threshold-new-game-draft-v1";
 
 // Drafts deliberately accept unfinished fields that cannot yet be saved as games.
+const actionDraftSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("timer"),
+    mode: z.enum(["start", "extend"]),
+    minutes: z.number(),
+  }),
+  vacuumDraftSchema,
+  z.object({
+    type: z.literal("lights"),
+    groups: z.array(
+      z.object({
+        repeat: z.number().optional(),
+        loop: z.enum(["next-challenge", "replaced"]).optional(),
+        entities: z.array(z.string()),
+        steps: z.array(
+          z.union([
+            lightStepSchema,
+            z.object({
+              mode: z.literal("scene"),
+              entity: z.string(),
+              seconds: z.number(),
+            }),
+          ]),
+        ),
+      }),
+    ),
+  }),
+  z.object({
+    type: z.literal("control"),
+    controlId: z.string(),
+    on: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("speech"),
+    entity: z.string(),
+    message: z.string(),
+  }),
+]);
+
 const draftSchema = z.object({
   autoId: z.boolean(),
   game: z.object({
@@ -15,6 +54,8 @@ const draftSchema = z.object({
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
     joinChallengeId: z.string().optional(),
+    briefing: z.string().optional(),
+    onStart: z.array(actionDraftSchema).optional(),
     timeLimitMinutes: z.number().optional(),
     clues: z
       .array(
@@ -50,48 +91,7 @@ const draftSchema = z.object({
         playerView: z.string().optional(),
         qrMode: z.enum(["hidden", "prompted"]).optional(),
         choices: z.array(z.string()).optional(),
-        onComplete: z
-          .array(
-            z.discriminatedUnion("type", [
-              z.object({
-                type: z.literal("timer"),
-                mode: z.enum(["start", "extend"]),
-                minutes: z.number(),
-              }),
-              vacuumDraftSchema,
-              z.object({
-                type: z.literal("lights"),
-                groups: z.array(
-                  z.object({
-                    repeat: z.number().optional(),
-                    loop: z.enum(["next-challenge", "replaced"]).optional(),
-                    entities: z.array(z.string()),
-                    steps: z.array(
-                      z.union([
-                        lightStepSchema,
-                        z.object({
-                          mode: z.literal("scene"),
-                          entity: z.string(),
-                          seconds: z.number(),
-                        }),
-                      ]),
-                    ),
-                  }),
-                ),
-              }),
-              z.object({
-                type: z.literal("control"),
-                controlId: z.string(),
-                on: z.boolean().optional(),
-              }),
-              z.object({
-                type: z.literal("speech"),
-                entity: z.string(),
-                message: z.string(),
-              }),
-            ]),
-          )
-          .optional(),
+        onComplete: z.array(actionDraftSchema).optional(),
       }),
     ),
   }),

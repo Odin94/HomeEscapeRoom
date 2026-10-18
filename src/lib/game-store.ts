@@ -12,6 +12,8 @@ export type Game = {
   designScheme?: DesignScheme;
   autoStart?: boolean;
   joinChallengeId?: string;
+  briefing?: string;
+  onStart?: Area["onComplete"];
   timeLimitMinutes?: number;
   controls: { id: string; name: string; entity: string }[];
 };
@@ -71,6 +73,7 @@ export type State = {
     voiceOutput: "phone" | "room";
   };
   player: { name: string; session_id: string; session: Session } | null;
+  briefing?: string;
   storyOrder?: string[];
   automationPending?: boolean;
   automation?: {

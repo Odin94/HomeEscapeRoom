@@ -226,8 +226,25 @@ function setSessionStatus(id: string, status: string) {
         })
         .run();
     }
+    if (status === "running" && !finished) {
+      for (const [index, action] of (definition(id).onStart || []).entries()) {
+        tx.insert(actionRuns)
+          .values({
+            id: `${id}:!start:${index}`,
+            session_id: id,
+            payload: JSON.stringify(action),
+          })
+          .onConflictDoNothing()
+          .run();
+      }
+    }
     tx.update(sessions).set({ status }).where(eq(sessions.id, id)).run();
   });
+  if (status === "running")
+    void runActions(id).catch(() => {
+      if (!closing)
+        event(id, "Starting room actions could not run; retry required");
+    });
 }
 const headers = {
   "content-type": "application/json",
@@ -551,6 +568,8 @@ function voiceAccess(request: Request, challengeId: string) {
 function visibleVoiceText(id: string, source: string, contentId: string) {
   const game = definition(id),
     completed = solved(id);
+  if (source === "story" && contentId === "$briefing")
+    return game.briefing || "";
   const area = game.areas.find((a) => a.id === contentId);
   if (
     source === "hint" &&
@@ -743,6 +762,7 @@ export async function handle(request: Request) {
           output: settings().voiceOutput,
         },
         designScheme: p ? active?.designScheme || "standard" : "standard",
+        briefing: p ? active?.briefing || "" : "",
         storyOrder: completed,
         automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,

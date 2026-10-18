@@ -71,13 +71,27 @@ export function App() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [incomingMarker, setIncomingMarker] = useState("");
   const playableAreas = playerChallenges(state?.areas || []);
-  const stories = (
-    state?.storyOrder ||
-    state?.areas.filter((a) => a.solved).map((a) => a.id) ||
-    []
-  )
-    .map((id) => state?.areas.find((a) => a.id === id))
-    .filter((a) => a?.solved && a.description);
+  const stories = [
+    ...(state?.briefing
+      ? [
+          {
+            id: "$briefing",
+            name: "Briefing",
+            kind: "narrative",
+            hint: "",
+            description: state.briefing,
+            solved: true,
+          },
+        ]
+      : []),
+    ...(
+      state?.storyOrder ||
+      state?.areas.filter((a) => a.solved).map((a) => a.id) ||
+      []
+    )
+      .map((id) => state?.areas.find((a) => a.id === id))
+      .filter((a) => a?.solved && a.description),
+  ];
   const storyIndex = Math.max(
     0,
     storyId ? stories.findIndex((a) => a?.id === storyId) : stories.length - 1,
