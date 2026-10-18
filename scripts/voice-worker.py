@@ -3,6 +3,11 @@ import json
 import os
 import sys
 import wave
+from pathlib import Path
+
+MODEL_ROOT = Path(__file__).resolve().parent.parent / "data/voice/models"
+VAD_MODEL = os.environ.get("VOICE_VAD_MODEL", str(MODEL_ROOT / "silero-v6.0.onnx"))
+PIPER_MODEL = os.environ.get("VOICE_PIPER_MODEL", str(MODEL_ROOT / "en_US-ljspeech-high.onnx"))
 
 
 def speech_bounds(pcm, session):
@@ -32,23 +37,23 @@ def main():
     if sys.argv[1] == 'health':
         import onnxruntime as ort
         from piper import PiperVoice
-        session = ort.InferenceSession(os.environ['VOICE_VAD_MODEL'], providers=['CPUExecutionProvider'])
+        session = ort.InferenceSession(VAD_MODEL, providers=['CPUExecutionProvider'])
         if speech_bounds(bytes(32000), session) is not None:
             raise ValueError('Silence detected as speech')
-        PiperVoice.load(os.environ['VOICE_PIPER_MODEL'])
+        PiperVoice.load(PIPER_MODEL)
         print(json.dumps({'ready': True}))
     elif sys.argv[1] == 'detect':
         import onnxruntime as ort
         options = ort.SessionOptions()
         options.inter_op_num_threads = 1
         options.intra_op_num_threads = 1
-        session = ort.InferenceSession(os.environ['VOICE_VAD_MODEL'], sess_options=options,
+        session = ort.InferenceSession(VAD_MODEL, sess_options=options,
                                        providers=['CPUExecutionProvider'])
         with open(sys.argv[2], 'rb') as source:
             print(json.dumps(speech_bounds(source.read(480002), session)))
     elif sys.argv[1] == 'speak':
         from piper import PiperVoice
-        voice = PiperVoice.load(os.environ['VOICE_PIPER_MODEL'])
+        voice = PiperVoice.load(PIPER_MODEL)
         with open(sys.argv[2], encoding='utf-8') as source, wave.open(sys.argv[3], 'wb') as output:
             frames = 0
             for chunk in voice.synthesize(source.read(2501)):

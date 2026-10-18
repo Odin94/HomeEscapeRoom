@@ -3,6 +3,8 @@ export default ts.config(
   {
     ignores: [
       "node_modules/**",
+      "data/**",
+      "artifacts/**",
       ".output/**",
       ".tanstack/**",
       "src/routeTree.gen.ts",

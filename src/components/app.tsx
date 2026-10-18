@@ -1,3 +1,5 @@
+import { Talk, Listen } from "./voice-controls";
+import { RoomPlayer } from "./voice-room-player";
 import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
 import { GameMarkdown } from "./game-markdown";
@@ -54,12 +56,26 @@ export function App() {
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
   const [joinSession, setJoinSession] = useState("");
   const [code, setCode] = useState("");
+  const [voiceAnswer, setVoiceAnswer] = useState<{
+    session: string;
+    challenge: string;
+  } | null>(null);
   const [challenge, setChallenge] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [incomingMarker, setIncomingMarker] = useState("");
   const activeArea =
     state?.areas.find((a) => a.available && a.id === challenge) ||
     state?.areas.find((a) => a.available);
+  useEffect(() => {
+    if (
+      voiceAnswer &&
+      (voiceAnswer.session !== state?.player?.session_id ||
+        voiceAnswer.challenge !== activeArea?.id)
+    ) {
+      setCode("");
+      setVoiceAnswer(null);
+    }
+  }, [voiceAnswer, state?.player?.session_id, activeArea?.id]);
   const refresh = useCallback(async () => {
     try {
       const next: State = await api();
@@ -502,6 +518,9 @@ export function App() {
                         {a.kind} · {a.playerView}
                       </p>
                       <GameMarkdown>{a.description}</GameMarkdown>
+                      {state.voice?.enabled && state.player && (
+                        <Listen source="story" contentId={a.id} />
+                      )}
                       <p>
                         Answer: <code>{a.unlockCode}</code>
                       </p>
@@ -535,9 +554,12 @@ export function App() {
               )}
               {tab === "Settings" && (
                 <section className="panel settings">
+                  {state.voice?.enabled && (
+                    <RoomPlayer sessions={state.sessions} />
+                  )}
                   <h2>Server connection</h2>
                   <form
-                    key={`${state.settings?.haUrl}:${state.settings?.publicUrl}`}
+                    key={`${state.settings?.haUrl}:${state.settings?.publicUrl}:${state.settings?.voiceEnabled}:${state.settings?.voiceLanguage}:${state.settings?.voiceOutput}`}
                     onSubmit={(e) => submit(e, "save-settings")}
                   >
                     <label>
@@ -553,6 +575,43 @@ export function App() {
                       Use a stable hostname that phones on your Wi-Fi can reach.
                       Leave blank to detect a LAN IP automatically. Current
                       link: {state.shareOrigin || "unavailable"}
+                    </p>
+                    <label>
+                      Local voice
+                      <select
+                        name="voiceEnabled"
+                        defaultValue={String(
+                          state.settings?.voiceEnabled || false,
+                        )}
+                      >
+                        <option value="false">Disabled</option>
+                        <option value="true">Enabled</option>
+                      </select>
+                    </label>
+                    <label>
+                      Speech language
+                      <select
+                        name="voiceLanguage"
+                        defaultValue={state.settings?.voiceLanguage || "en"}
+                      >
+                        <option value="en">English</option>
+                        <option value="de">German</option>
+                      </select>
+                    </label>
+                    <label>
+                      Audio destination
+                      <select
+                        name="voiceOutput"
+                        defaultValue={state.settings?.voiceOutput || "phone"}
+                      >
+                        <option value="phone">Requesting phone</option>
+                        <option value="room">Designated room player</option>
+                      </select>
+                    </label>
+                    <p>
+                      Set up HTTPS and local speech engines before enabling
+                      voice. Rehearse microphone and speaker output on each game
+                      device.
                     </p>
                     <label>
                       Home Assistant URL
@@ -683,6 +742,9 @@ export function App() {
               .map((a) => (
                 <section key={a.id} data-view={a.playerView || "narrative"}>
                   <GameMarkdown>{a.description}</GameMarkdown>
+                  {state.voice?.enabled && state.player && (
+                    <Listen source="story" contentId={a.id} />
+                  )}
                 </section>
               ))}
             {!!state.clues?.length && (
@@ -692,6 +754,9 @@ export function App() {
                   <details key={clue.id}>
                     <summary>{clue.name}</summary>
                     <ClueView clue={clue} />
+                    {state.voice?.enabled && clue.kind === "markdown" && (
+                      <Listen source="clue" contentId={clue.id} />
+                    )}
                   </details>
                 ))}
               </section>
@@ -751,6 +816,32 @@ export function App() {
               >
                 {activeArea.hint && (
                   <GameMarkdown>{activeArea.hint}</GameMarkdown>
+                )}
+                {state.voice?.enabled && activeArea.hint && (
+                  <Listen
+                    key={`listen-${state.player.session_id}-${activeArea.id}`}
+                    source="hint"
+                    contentId={activeArea.id}
+                  />
+                )}
+                {state.voice?.enabled && activeArea.kind === "text" && (
+                  <Talk
+                    key={`talk-${state.player.session_id}-${activeArea.id}`}
+                    sessionId={state.player.session_id}
+                    challengeId={activeArea.id}
+                    disabled={
+                      busy ||
+                      !!state.automationPending ||
+                      state.player.session.status !== "running"
+                    }
+                    onText={(text) => {
+                      setVoiceAnswer({
+                        session: state.player!.session_id,
+                        challenge: activeArea.id,
+                      });
+                      setCode(text);
+                    }}
+                  />
                 )}
                 <ChallengeInput
                   key={`${state.player.session_id}-${activeArea.id}`}

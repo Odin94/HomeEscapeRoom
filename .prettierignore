@@ -3,3 +3,5 @@ node_modules
 .tanstack
 pnpm-lock.yaml
 src/routeTree.gen.ts
+data
+artifacts

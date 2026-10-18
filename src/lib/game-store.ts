@@ -49,6 +49,7 @@ type Session = {
   timer?: { remainingMs: number; measuredAt: number; running: boolean } | null;
 };
 export type State = {
+  voice?: { enabled: boolean; output: "phone" | "room" };
   designScheme?: DesignScheme;
   admin: boolean;
   adminConfigured: boolean;
@@ -58,7 +59,14 @@ export type State = {
   games?: Game[];
   areas: Area[];
   clues?: Clue[];
-  settings?: { haUrl: string; tokenConfigured: boolean; publicUrl: string };
+  settings?: {
+    haUrl: string;
+    tokenConfigured: boolean;
+    publicUrl: string;
+    voiceEnabled: boolean;
+    voiceLanguage: "en" | "de";
+    voiceOutput: "phone" | "room";
+  };
   player: { name: string; session_id: string; session: Session } | null;
   automationPending?: boolean;
   automation?: {

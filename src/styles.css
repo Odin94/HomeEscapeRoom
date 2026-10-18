@@ -1238,3 +1238,14 @@ textarea {
   text-align: center;
   margin-block: 1rem;
 }
+
+.voice-controls {
+  margin-block: 1rem;
+}
+.voice-controls > .button:first-child {
+  min-height: 3.5rem;
+  min-width: 9rem;
+}
+.voice-controls .button + .button {
+  margin-inline-start: 0.5rem;
+}

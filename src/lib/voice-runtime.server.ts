@@ -179,7 +179,7 @@ export async function transcribe(
     const detection = JSON.parse(
       (
         await run(
-          process.env.VOICE_PYTHON || "python3",
+          process.env.VOICE_PYTHON || resolve("data/voice/venv/bin/python"),
           [resolve("scripts/voice-worker.py"), "detect", raw],
           signal,
           1024,
@@ -258,7 +258,7 @@ export async function synthesize(text: string, signal: AbortSignal) {
       output = join(dir, "speech.wav");
     await writeFile(input, text, { mode: 0o600 });
     await run(
-      process.env.VOICE_PYTHON || "python3",
+      process.env.VOICE_PYTHON || resolve("data/voice/venv/bin/python"),
       [resolve("scripts/voice-worker.py"), "speak", input, output],
       signal,
     );
@@ -274,12 +274,12 @@ export async function voiceHealth(signal: AbortSignal) {
   const results = await Promise.allSettled([
     run(process.env.VOICE_FFMPEG || "ffmpeg", ["-version"], bounded, 16384),
     run(
-      process.env.VOICE_PYTHON || "python3",
+      process.env.VOICE_PYTHON || resolve("data/voice/venv/bin/python"),
       [resolve("scripts/voice-worker.py"), "health"],
       bounded,
       1024,
     ),
-    fetch("http://127.0.0.1:8178/", {
+    fetch("http://127.0.0.1:8178/health", {
       signal: bounded,
       redirect: "error",
     }).then(async (response) => {

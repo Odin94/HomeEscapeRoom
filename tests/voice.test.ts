@@ -270,6 +270,21 @@ test("voice API preserves settings and enforces origin, membership, source, sess
     );
   assert.equal((await upload("a", "")).status, 400);
   assert.equal((await upload("b", p)).status, 400);
+  process.env.FAKE_VAD = JSON.stringify({ start: 0, end: 1000 });
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => {
+      await req({ action: "status", id, status: "paused" }, gm);
+      return Response.json({ text: "red" });
+    };
+    const delayed = await upload("a", p);
+    assert.equal(delayed.status, 400);
+    assert.match((await delayed.json()).error, /paused/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    delete process.env.FAKE_VAD;
+  }
+  await req({ action: "status", id, status: "running" }, gm);
   await req({ action: "unlock", code: "red", challengeId: "a" }, p);
   assert.equal((await upload("a", p)).status, 400);
   assert.equal(
