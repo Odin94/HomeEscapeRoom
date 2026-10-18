@@ -11,6 +11,7 @@ Start with push-to-talk and short answers. Keep typed answers available. Continu
 ## Architecture and decisions
 
 - Use `whisper.cpp` as a separate local transcription service, bound to loopback. OpenWhispr is a desktop dictation app; integrating the underlying speech engine provides a clearer server interface for recordings from several phones.
+- Include local voice activity detection (VAD) using **Silero VAD**, an open pretrained model published under MIT. Prefer the pinned `whisper.cpp` release's supported Silero integration so the initial backend does not need another service. Verify the exact model artifact, license, supported format, and enablement options against that release; pin its version and checksum and download it outside Git. If that integration cannot expose speech/no-speech results reliably, evaluate a local ONNX Runtime adapter for Silero on the MacBook.
 - Use Piper as a separate local text-to-speech service. Generate audio on the MacBook and deliver it through authenticated game endpoints. Verify the selected Piper release, macOS support, package license, and individual voice model license before adopting it. Browser speech synthesis can be an optional fallback, with device-dependent voices and offline availability.
 - Phones communicate only with Threshold over HTTPS. Threshold authenticates requests and calls the speech services over loopback. Never expose speech engines directly to the LAN or place their configuration in player payloads.
 - Transcription produces a candidate answer, never a decision about correctness. Route confirmed text through the existing player answer validation in `src/lib/db.server.ts`.
@@ -19,10 +20,22 @@ Start with push-to-talk and short answers. Keep typed answers available. Continu
 - For a shared room speaker, pair it with the MacBook and open one dedicated GM-authorized room playback page there. That page plays server-generated audio through the selected macOS output. The backend generating audio does not itself make the MacBook speak.
 
 ```text
-Phone microphone -> HTTPS Threshold endpoint -> local Whisper -> candidate text
+Phone microphone -> HTTPS Threshold endpoint -> decode/resample -> local Silero VAD
+Detected speech -> local Whisper -> candidate text
 Candidate text -> player confirmation -> existing answer validation
 Authorized feedback -> local Piper -> audio -> phone OR designated room player
 ```
+
+### Voice activity detection behavior
+
+VAD detects when speech is present. It is useful for rejecting recordings with no speech and trimming excess silence before transcription. It is not strictly necessary for manually stopped push-to-talk, but include it in the first backend release to reduce unnecessary inference and the risk of transcripts produced from silence. It does not establish who spoke, remove background speech, cancel speaker echo, or guarantee transcription accuracy.
+
+- Run VAD locally on the MacBook after validating/decoding the bounded upload. Normalize to mono 16 kHz PCM for the selected model/runtime. Keep model state isolated or reset between recordings and players.
+- When no speech is detected, skip Whisper and return a short actionable message such as “No speech detected. Try again or type your answer.” Never submit a fabricated or empty answer. If VAD itself fails, report speech input unavailable and preserve typed play.
+- Preserve brief speech and word boundaries: tune speech thresholds and minimum durations using single-word answers, quiet speakers, accents, and individual digits. Pad detected segments at both ends (initial trial: 200–300 ms), preserve pauses within an answer, and avoid clipping or aggressive segment concatenation. These are rehearsal settings, not fixed guarantees.
+- Server-side VAD on a completed upload cannot stop the phone's ongoing recording. Keep manual stop and the hard duration limit in the first release. Optional stop-after-silence needs either local browser inference using Silero/ONNX with all assets served by Threshold, or a separately designed authenticated streaming path to the MacBook.
+- If adding browser VAD later, benchmark iPhone Safari and Android Chrome battery/CPU use and model loading. Start endpointing trials only after speech begins, allow roughly 1–1.5 seconds of trailing silence, retain an initial-silence timeout and manual stop, and tune against natural pauses. Automatic stopping must still lead to transcript review, not automatic answer submission.
+- Treat background conversations and game speech as potential speech detections. Keep push-to-talk and playback/recording coordination; VAD is not a substitute for those controls or a reason to enable continuous listening.
 
 ## Phase 1: prove the MacBook and phone path
 
@@ -31,6 +44,7 @@ Authorized feedback -> local Piper -> audio -> phone OR designated room player
 3. Benchmark short English/German puzzle answers, names, digits, silence, and background music on the actual MacBook. Measure cold start, warm transcription, synthesis, and concurrent requests while the game runs. Aim initially for a warm transcript within three seconds after recording stops; treat this as a target to measure, not a promise.
 4. Test Piper output and model pronunciation. If the selected runtime cannot run reliably on this Mac, resolve the runtime choice before implementing its adapter.
 5. Prove microphone capture and generated audio playback on actual iPhone Safari and Android Chrome, including a paired Bluetooth speaker.
+6. Benchmark the selected Silero model on the MacBook with silence, room noise/music, very short answers, quiet speech, pauses, nearby conversations, and game TTS playback. Record false detections, missed speech, clipped syllables, and VAD latency. Confirm offline operation after downloading the model and that no-speech recordings skip transcription.
 
 Deliverable: documented working runtime/model versions, hardware, language choice, measured latency, and a confirmed HTTPS approach. Commit the integration design and setup notes as one finished step.
 
@@ -95,7 +109,7 @@ Acceptance: phone mode plays on the selected phone output; room mode plays once 
 
 ## Validation and delivery
 
-Automated checks should cover authorization, request limits, malformed audio, cancellation/timeouts, queue bounds, stale challenge handling, hidden-content protection, settings preservation, and room-device ownership/deduplication. Stub speech engines in tests; separately run real-engine integration checks on macOS.
+Automated checks should cover authorization, request limits, malformed audio, cancellation/timeouts, queue bounds, stale challenge handling, hidden-content protection, settings preservation, and room-device ownership/deduplication. Add VAD coverage for no-speech bypassing Whisper, detector failure, per-recording state isolation, sample-rate conversion, padded segment bounds, and preserving short answers. If automatic endpointing ships later, test initial silence, pauses, manual cancellation, and the hard recording limit. Stub speech engines in tests; separately run real-engine integration checks with small licensed audio fixtures on macOS.
 
 Manual rehearsal must include iPhone Safari and Android Chrome; English/German as needed; permissions granted/denied; Bluetooth paired to phone and Mac; room noise; multiple teams; simultaneous answers; pause/end during transcription; refresh/reconnect; service restart; and no internet after model download. Record actual results and remaining limitations.
 
@@ -114,6 +128,7 @@ Run `pnpm build` for implementation steps as well. Inspect the diff after format
 ## References
 
 - [whisper.cpp HTTP server and supported conversion options](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server)
+- [Silero VAD open model, local runtimes, and MIT license](https://github.com/snakers4/silero-vad)
 - [OpenWhispr](https://github.com/openwhispr/openwhispr)
 - [Piper local speech synthesis](https://github.com/OHF-Voice/piper1-gpl)
 - [Browser microphone secure-context requirements](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
