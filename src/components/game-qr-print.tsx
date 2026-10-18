@@ -78,9 +78,9 @@ export function GameQrPrint({
         {busy ? "Generating QR codes…" : "Print all QR codes / PDF"}
       </Button>
       <p>
-        One A4 sheet with a start / join code and all QR answers, labeled with
-        cutting guides. Choose Save as PDF in the print dialog. Save game
-        changes before printing.
+        Eight codes per A4 page, including a start / join code and all QR
+        answers, labeled with cutting guides. Choose Save as PDF in the print
+        dialog. Save game changes before printing.
       </p>
       {!origin && (
         <p>
@@ -112,25 +112,25 @@ export function GameQrPrint({
                 });
             }}
           >
-            <h1>
-              <GameMarkdown inline>{game.name}</GameMarkdown> — QR codes
-            </h1>
-            <div
-              className="game-qr-print-grid"
-              style={{
-                gridTemplateColumns: `repeat(${sheet.length <= 6 ? 2 : sheet.length <= 12 ? 3 : sheet.length <= 20 ? 4 : 5}, minmax(0, 1fr))`,
-              }}
-            >
-              {sheet.map((code, index) => (
-                <section key={index}>
-                  <img src={code.image} alt={code.label} />
-                  <strong>
-                    <GameMarkdown inline>{code.label}</GameMarkdown>
-                  </strong>
-                  <small>{code.detail}</small>
-                </section>
-              ))}
-            </div>
+            {Array.from({ length: Math.ceil(sheet.length / 8) }, (_, page) => (
+              <div className="game-qr-print-page" key={page}>
+                <h1>
+                  <GameMarkdown inline>{game.name}</GameMarkdown> — QR codes
+                  {sheet.length > 8 && ` · Page ${page + 1}`}
+                </h1>
+                <div className="game-qr-print-grid">
+                  {sheet.slice(page * 8, (page + 1) * 8).map((code, index) => (
+                    <section key={index}>
+                      <img src={code.image} alt={code.label} />
+                      <strong>
+                        <GameMarkdown inline>{code.label}</GameMarkdown>
+                      </strong>
+                      <small>{code.detail}</small>
+                    </section>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>,
           document.body,
         )}

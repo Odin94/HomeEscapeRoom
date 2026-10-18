@@ -1363,7 +1363,17 @@ textarea {
     margin: 0;
     padding: 0;
   }
+  body:has(> .game-qr-print-sheet) {
+    page: game-qr;
+  }
+  @page game-qr {
+    size: A4 portrait;
+    margin: 0;
+  }
   .game-qr-print-sheet {
+    display: block;
+  }
+  .game-qr-print-page {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -1374,6 +1384,9 @@ textarea {
     background: white;
     font-family: Arial, sans-serif;
   }
+  .game-qr-print-page:not(:last-child) {
+    break-after: page;
+  }
   .game-qr-print-sheet h1 {
     font-size: 12pt;
     margin: 0 0 3mm;
@@ -1381,7 +1394,8 @@ textarea {
   }
   .game-qr-print-grid {
     display: grid;
-    grid-auto-rows: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
     flex: 1;
     min-height: 0;
   }
