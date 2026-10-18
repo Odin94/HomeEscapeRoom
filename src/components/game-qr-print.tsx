@@ -42,7 +42,12 @@ export function GameQrPrint({
             ? [
                 {
                   label: area.name,
-                  hint: area.hint,
+                  hint: [area.hint.trim(), area.description.trim()]
+                    .filter(
+                      (text, index, texts) =>
+                        text && texts.indexOf(text) === index,
+                    )
+                    .join("\n\n"),
                   detail: `Answer · Challenge ${index + 1} · ${area.id}`,
                   url: `${origin}/?code=${encodeURIComponent(area.unlockCode)}`,
                 },
@@ -81,9 +86,9 @@ export function GameQrPrint({
       </Button>
       <p>
         Eight codes per A4 page, including a start / join code and all QR
-        answers, labeled with cutting guides and challenge hints in fine print.
-        Choose Save as PDF in the print dialog. Save game changes before
-        printing.
+        answers, labeled with cutting guides and challenge hints and
+        descriptions in fine print. Choose Save as PDF in the print dialog. Save
+        game changes before printing.
       </p>
       {!origin && (
         <p>
