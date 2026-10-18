@@ -266,8 +266,10 @@ async function affectedLights(entity: string): Promise<string[]> {
   return members.filter((member: string) => member.startsWith("light."));
 }
 async function runActions(id: string) {
-  for (const run of pending(id)) {
-    if (session(id).status !== "running") break;
+  while (!closing) {
+    // Re-read after each effect: QR discoveries can enqueue more while we await it.
+    const run = pending(id)[0];
+    if (!run || session(id).status !== "running") break;
     if (run.status !== "pending") break;
     const claimed = db
       .update(actionRuns)
@@ -399,6 +401,7 @@ async function complete(
   code: string,
   external: boolean,
   challenge?: string,
+  waitForEffects = true,
 ) {
   const s = session(id),
     game = definition(id),
@@ -476,8 +479,16 @@ async function complete(
       .values({ session_id: id, message: `Unlocked ${area.name}` })
       .run();
   });
-  await lightLoops.stopSession(id, progress < game.areas.length);
-  await runActions(id);
+  const effects = async () => {
+    await lightLoops.stopSession(id, progress < game.areas.length);
+    if (!closing) await runActions(id);
+  };
+  if (waitForEffects) await effects();
+  else
+    void effects().catch(() => {
+      if (!closing)
+        event(id, "Opening room actions could not start; retry required");
+    });
 }
 export async function handleCallback(request: Request) {
   try {
@@ -899,7 +910,7 @@ export async function handle(request: Request) {
       const game = definition(s.id);
       const opening = game.areas.find((a) => a.id === game.joinChallengeId);
       if (opening && !solved(s.id).includes(opening.id))
-        await complete(s.id, opening.unlockCode, false, opening.id);
+        await complete(s.id, opening.unlockCode, false, opening.id, false);
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },

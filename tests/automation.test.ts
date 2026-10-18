@@ -310,111 +310,232 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
   }
 });
 
-test("QR scans complete while earlier room actions run or await retry", async () => {
-  const gm = (
-    await call({ action: "login", key: "automation-test-key" })
-  ).headers
-    .get("set-cookie")!
-    .split(";")[0];
-  const originalFetch = globalThis.fetch;
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let started!: () => void;
-  const running = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  try {
-    saveSettings({
-      haUrl: "http://ha.test",
-      haToken: "test-token",
-      adminKey: "automation-test-key",
-      publicUrl: "",
-    });
-    globalThis.fetch = async () => {
-      started();
-      await held;
-      return new Response("", { status: 503 });
-    };
-    const game = {
-      id: "scan-during-effects",
-      name: "Scan during effects",
-      autoStart: true,
-      controls: [],
-      areas: [
-        {
-          id: "comms",
-          name: "Communications",
-          kind: "text",
-          hint: "",
-          description: "",
-          unlockCode: "online",
-          onComplete: [{ type: "control", controlId: "lamp" }],
-        },
-        {
-          id: "maintenance",
-          name: "Maintenance access",
-          kind: "qr",
-          qrMode: "hidden",
-          hint: "",
-          description: "Connected",
-          unlockCode: "maintenance-code",
-        },
-        {
-          id: "next",
-          name: "Next access",
-          kind: "qr",
-          qrMode: "hidden",
-          hint: "",
-          description: "Connected again",
-          unlockCode: "next-code",
-        },
-      ],
-    };
-    const definition = {
-      ...game,
-      controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
-    };
-    assert.equal(
-      (await call({ action: "save-game", game: definition }, gm)).status,
-      200,
-    );
-    const { id } = await (
-      await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
-    ).json();
-    const player = (await call({ action: "join", id, name: "Crew" })).headers
+for (const failEarlier of [false, true])
+  test(`QR scans and their effects survive earlier ${failEarlier ? "failed" : "running"} actions`, async () => {
+    const gm = (
+      await call({ action: "login", key: "automation-test-key" })
+    ).headers
       .get("set-cookie")!
       .split(";")[0];
-    const completion = call(
-      { action: "unlock", code: "online", challengeId: "comms" },
-      player,
-    );
-    await running;
-    assert.equal(
-      (await (await call(undefined, player)).json()).automationPending,
-      true,
-    );
-    assert.equal(
-      (await call({ action: "unlock", code: "maintenance-code" }, player))
-        .status,
-      200,
-    );
-    release();
-    assert.equal((await completion).status, 200);
-    assert.equal(
-      (await (await call(undefined, player)).json()).automationPending,
-      true,
-    );
-    assert.equal(
-      (await call({ action: "unlock", code: "next-code" }, player)).status,
-      200,
-    );
-    const state = await (await call(undefined, player)).json();
-    assert.equal(state.player.session.progress, 3);
-    assert.deepEqual(state.storyOrder, ["comms", "maintenance", "next"]);
-  } finally {
-    release();
-    globalThis.fetch = originalFetch;
-  }
-});
+    const originalFetch = globalThis.fetch;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    try {
+      saveSettings({
+        haUrl: "http://ha.test",
+        haToken: "test-token",
+        adminKey: "automation-test-key",
+        publicUrl: "",
+      });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        if (calls === 1) {
+          started();
+          await held;
+          if (failEarlier) return new Response("", { status: 503 });
+        }
+        return Response.json([]);
+      };
+      const game = {
+        id: "scan-during-effects",
+        name: "Scan during effects",
+        autoStart: true,
+        controls: [],
+        areas: [
+          {
+            id: "comms",
+            name: "Communications",
+            kind: "text",
+            hint: "",
+            description: "",
+            unlockCode: "online",
+            onComplete: [{ type: "control", controlId: "lamp" }],
+          },
+          {
+            id: "maintenance",
+            name: "Maintenance access",
+            kind: "qr",
+            qrMode: "hidden",
+            hint: "",
+            description: "Connected",
+            unlockCode: "maintenance-code",
+            onComplete: [{ type: "control", controlId: "lamp" }],
+          },
+          {
+            id: "next",
+            name: "Next access",
+            kind: "qr",
+            qrMode: "hidden",
+            hint: "",
+            description: "Connected again",
+            unlockCode: "next-code",
+          },
+        ],
+      };
+      const definition = {
+        ...game,
+        controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+      };
+      assert.equal(
+        (await call({ action: "save-game", game: definition }, gm)).status,
+        200,
+      );
+      const { id } = await (
+        await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+      ).json();
+      const player = (await call({ action: "join", id, name: "Crew" })).headers
+        .get("set-cookie")!
+        .split(";")[0];
+      const completion = call(
+        { action: "unlock", code: "online", challengeId: "comms" },
+        player,
+      );
+      await running;
+      assert.equal(
+        (await (await call(undefined, player)).json()).automationPending,
+        true,
+      );
+      assert.equal(
+        (await call({ action: "unlock", code: "maintenance-code" }, player))
+          .status,
+        200,
+      );
+      release();
+      assert.equal((await completion).status, 200);
+      assert.equal(calls, failEarlier ? 1 : 2);
+      assert.equal(
+        (await (await call(undefined, player)).json()).automationPending,
+        failEarlier,
+      );
+      assert.equal(
+        (await call({ action: "unlock", code: "next-code" }, player)).status,
+        200,
+      );
+      const state = await (await call(undefined, player)).json();
+      assert.equal(state.player.session.progress, 3);
+      assert.deepEqual(state.storyOrder, ["comms", "maintenance", "next"]);
+    } finally {
+      release();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+test(
+  "joining returns a player cookie and accepts scans during opening effects",
+  { timeout: 3000 },
+  async () => {
+    const gm = (
+      await call({ action: "login", key: "automation-test-key" })
+    ).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    const originalFetch = globalThis.fetch;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let finished!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finished = resolve;
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      saveSettings({
+        haUrl: "http://ha.test",
+        haToken: "test-token",
+        adminKey: "automation-test-key",
+        publicUrl: "",
+      });
+      globalThis.fetch = async () => {
+        started();
+        await held;
+        finished();
+        return Response.json([]);
+      };
+      const game = {
+        id: "opening-effects",
+        name: "Opening effects",
+        autoStart: true,
+        joinChallengeId: "boot",
+        controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+        areas: [
+          {
+            id: "boot",
+            name: "Opening",
+            kind: "qr",
+            requires: [],
+            hint: "",
+            description: "Online",
+            unlockCode: "boot-code",
+            onComplete: [{ type: "control", controlId: "lamp" }],
+          },
+          {
+            id: "access",
+            name: "Access",
+            kind: "qr",
+            hint: "",
+            description: "Connected",
+            unlockCode: "access-code",
+          },
+        ],
+      };
+      assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+      const { id } = await (
+        await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+      ).json();
+      const joining = call({ action: "join", id, name: "Crew" });
+      await running;
+      const joined = await Promise.race([
+        joining,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            release();
+            reject(new Error("Joining waited for opening automation"));
+          }, 1000);
+        }),
+      ]);
+      clearTimeout(timeout);
+      assert.equal(joined.status, 200);
+      const player = joined.headers.get("set-cookie")!.split(";")[0];
+      assert.equal(
+        (await (await call(undefined, player)).json()).automationPending,
+        true,
+      );
+      assert.equal(
+        (await call({ action: "unlock", code: "access-code" }, player)).status,
+        200,
+      );
+      assert.equal(
+        (await (await call(undefined, player)).json()).player.session.progress,
+        2,
+      );
+      release();
+      await done;
+      // Let the effect runner record its result before restoring the mock and closing the database.
+      for (let tries = 0; tries < 20; tries++) {
+        if (!(await (await call(undefined, player)).json()).automationPending)
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      assert.equal(
+        (await (await call(undefined, player)).json()).automationPending,
+        false,
+      );
+    } finally {
+      clearTimeout(timeout);
+      release();
+      globalThis.fetch = originalFetch;
+    }
+  },
+);
