@@ -1,3 +1,4 @@
+import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
@@ -667,6 +668,7 @@ export function App() {
           </section>
         ) : (
           <article className="story">
+            <GameTimer timer={state.player.session.timer} />
             {state.player.session.status !== "running" && (
               <p className="session-status">
                 {state.player.session.status === "open"

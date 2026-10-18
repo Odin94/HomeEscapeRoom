@@ -11,6 +11,7 @@ export type Game = {
   clues?: Clue[];
   designScheme?: DesignScheme;
   autoStart?: boolean;
+  timeLimitMinutes?: number;
   controls: { id: string; name: string; entity: string }[];
 };
 export type Area = {
@@ -23,6 +24,7 @@ export type Area = {
   available?: boolean;
   solved?: boolean;
   onComplete?: (
+    | { type: "timer"; mode: "start" | "extend"; minutes: number }
     | VacuumAction
     | LightTransition
     | { type: "control"; controlId: string; on?: boolean }
@@ -43,6 +45,7 @@ type Session = {
   progress: number;
   players?: number;
   acceptingPlayers?: boolean;
+  timer?: { remainingMs: number; measuredAt: number; running: boolean } | null;
 };
 export type State = {
   designScheme?: DesignScheme;

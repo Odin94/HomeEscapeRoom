@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { AlexaAnswers } from "./alexa-answers.server";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
+  sessionTimers,
   challengeCompletions,
   actionRuns,
   sessionAutomation,
@@ -161,7 +162,62 @@ function secret(a: string, b: string) {
 function session(id: string) {
   const s = db.select().from(sessions).where(eq(sessions.id, id)).get();
   if (!s) throw new Error("Game not found.");
-  return s;
+  const timer = db
+    .select()
+    .from(sessionTimers)
+    .where(eq(sessionTimers.session_id, id))
+    .get();
+  const now = Date.now();
+  return {
+    ...s,
+    timer: timer
+      ? {
+          remainingMs: timerRemaining(timer, now),
+          measuredAt: now,
+          running: timer.resumed_at !== null,
+        }
+      : null,
+  };
+}
+function timerRemaining(
+  timer: { remaining_ms: number; resumed_at: number | null },
+  now: number,
+) {
+  return Math.max(
+    0,
+    timer.remaining_ms -
+      (timer.resumed_at === null ? 0 : now - timer.resumed_at),
+  );
+}
+function setSessionStatus(id: string, status: string) {
+  const s = session(id),
+    now = Date.now();
+  db.transaction((tx) => {
+    const timer = tx
+      .select()
+      .from(sessionTimers)
+      .where(eq(sessionTimers.session_id, id))
+      .get();
+    const minutes = definition(id).timeLimitMinutes;
+    const finished = s.progress >= definition(id).areas.length;
+    if (timer || (status === "running" && minutes && !finished)) {
+      tx.insert(sessionTimers)
+        .values({
+          session_id: id,
+          remaining_ms: timer ? timerRemaining(timer, now) : minutes! * 60000,
+          resumed_at: status === "running" && !finished ? now : null,
+        })
+        .onConflictDoUpdate({
+          target: sessionTimers.session_id,
+          set: {
+            remaining_ms: timer ? timerRemaining(timer, now) : minutes! * 60000,
+            resumed_at: status === "running" && !finished ? now : null,
+          },
+        })
+        .run();
+    }
+    tx.update(sessions).set({ status }).where(eq(sessions.id, id)).run();
+  });
 }
 const headers = {
   "content-type": "application/json",
@@ -370,7 +426,30 @@ async function complete(
     tx.insert(challengeCompletions)
       .values({ id: `${id}:${area.id}`, session_id: id, challenge_id: area.id })
       .run();
-    for (const [index, action] of (area.onComplete || []).entries())
+    const now = Date.now();
+    let timer = tx
+      .select()
+      .from(sessionTimers)
+      .where(eq(sessionTimers.session_id, id))
+      .get();
+    for (const action of area.onComplete || []) {
+      if (action.type !== "timer") continue;
+      const remaining =
+        action.minutes * 60000 +
+        (action.mode === "extend" && timer ? timerRemaining(timer, now) : 0);
+      timer = { session_id: id, remaining_ms: remaining, resumed_at: now };
+      tx.insert(sessionTimers)
+        .values(timer)
+        .onConflictDoUpdate({ target: sessionTimers.session_id, set: timer })
+        .run();
+    }
+    if (timer && progress === game.areas.length)
+      tx.update(sessionTimers)
+        .set({ remaining_ms: timerRemaining(timer, now), resumed_at: null })
+        .where(eq(sessionTimers.session_id, id))
+        .run();
+    for (const [index, action] of (area.onComplete || []).entries()) {
+      if (action.type === "timer") continue;
       tx.insert(actionRuns)
         .values({
           id: `${id}:${s.progress}:${index}`,
@@ -378,6 +457,7 @@ async function complete(
           payload: JSON.stringify(action),
         })
         .run();
+    }
     tx.insert(events)
       .values({ session_id: id, message: `Unlocked ${area.name}` })
       .run();
@@ -605,10 +685,7 @@ export async function handle(request: Request) {
         .where(eq(players.token, cookie(request, "player")))
         .run();
       if (s.status === "open" && definition(s.id).autoStart)
-        db.update(sessions)
-          .set({ status: "running" })
-          .where(eq(sessions.id, s.id))
-          .run();
+        setSessionStatus(s.id, "running");
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },
@@ -754,10 +831,7 @@ export async function handle(request: Request) {
       session(body.id);
       if (!["open", "running", "paused", "closed"].includes(body.status))
         throw new Error("Invalid status");
-      db.update(sessions)
-        .set({ status: body.status })
-        .where(eq(sessions.id, body.id))
-        .run();
+      setSessionStatus(body.id, body.status);
       if (body.status !== "running") await lightLoops.stopSession(body.id);
       if (body.status === "closed") {
         db.delete(players).where(eq(players.session_id, body.id)).run();

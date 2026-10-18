@@ -670,3 +670,99 @@ test("parallel challenges share out-of-order completions and protect revealed cl
     3,
   );
 });
+
+test("persistent timers start, pause, extend once, replace, expire and stop on completion", async () => {
+  const gm = (await call({ action: "login", key: settings().adminKey })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  for (const initial of [undefined, 10]) {
+    const game = {
+      id: initial ? "timed-game" : "untimed-game",
+      name: "Timer",
+      autoStart: true,
+      timeLimitMinutes: initial,
+      controls: [],
+      areas: [
+        {
+          id: "a",
+          name: "A",
+          kind: "text",
+          unlockCode: "a",
+          hint: "",
+          description: "",
+          onComplete: [{ type: "timer", mode: "extend", minutes: 5 }],
+        },
+        {
+          id: "b",
+          name: "B",
+          kind: "text",
+          unlockCode: "b",
+          hint: "",
+          description: "",
+          onComplete: [{ type: "timer", mode: "start", minutes: 2 }],
+        },
+        {
+          id: "c",
+          name: "C",
+          kind: "text",
+          unlockCode: "c",
+          hint: "",
+          description: "",
+        },
+      ],
+    };
+    assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+    const { id } = await (
+      await call({ action: "create", name: "Timer", gameId: game.id }, gm)
+    ).json();
+    const p = (await call({ action: "join", id, name: "Player" })).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    const current = async () =>
+      (await (await call(undefined, p)).json()).player.session.timer;
+    let timer = await current();
+    if (initial) {
+      assert.ok(timer.remainingMs <= 600000 && timer.remainingMs > 590000);
+      assert.equal(timer.running, true);
+    } else assert.equal(timer, null);
+    assert.equal(
+      (await call({ action: "unlock", code: "a", challengeId: "a" }, p)).status,
+      200,
+    );
+    timer = await current();
+    assert.ok(timer.remainingMs > (initial ? 890000 : 290000));
+    assert.equal(
+      (await call({ action: "unlock", code: "a", challengeId: "a" }, p)).status,
+      400,
+    );
+    assert.ok((await current()).remainingMs <= timer.remainingMs);
+    await call({ action: "status", id, status: "paused" }, gm);
+    timer = await current();
+    assert.equal(timer.running, false);
+    assert.equal((await current()).remainingMs, timer.remainingMs);
+    await call({ action: "status", id, status: "running" }, gm);
+    assert.equal((await current()).running, true);
+    assert.equal(
+      (await call({ action: "unlock", code: "b", challengeId: "b" }, p)).status,
+      200,
+    );
+    timer = await current();
+    assert.ok(timer.remainingMs <= 120000 && timer.remainingMs > 110000);
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 180000;
+      assert.equal((await current()).remainingMs, 0);
+      assert.equal(
+        (await call({ action: "unlock", code: "c", challengeId: "c" }, p))
+          .status,
+        200,
+      );
+      assert.equal((await current()).running, false);
+    } finally {
+      Date.now = realNow;
+    }
+    await call({ action: "status", id, status: "paused" }, gm);
+    await call({ action: "status", id, status: "running" }, gm);
+    assert.equal((await current()).running, false);
+  }
+});

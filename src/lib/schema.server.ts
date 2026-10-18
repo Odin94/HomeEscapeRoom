@@ -59,3 +59,11 @@ export const challengeCompletions = sqliteTable("challenge_completions", {
     .references(() => sessions.id),
   challenge_id: text("challenge_id").notNull(),
 });
+
+export const sessionTimers = sqliteTable("session_timers", {
+  session_id: text("session_id")
+    .primaryKey()
+    .references(() => sessions.id),
+  remaining_ms: integer("remaining_ms").notNull(),
+  resumed_at: integer("resumed_at"),
+});

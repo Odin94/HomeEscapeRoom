@@ -325,6 +325,27 @@ export function GameEditor({
         together. IDs must be unique lowercase slugs. Saving replaces this
         game's JSON file; existing sessions keep their snapshot.
       </p>
+      <label>
+        Time limit (minutes, optional)
+        <input
+          type="number"
+          min={1}
+          max={10080}
+          step={1}
+          value={game.timeLimitMinutes ?? ""}
+          onChange={(e) =>
+            setGame({
+              ...game,
+              timeLimitMinutes:
+                e.target.value === "" ? undefined : Number(e.target.value),
+            })
+          }
+        />
+      </label>
+      <p>
+        The countdown starts with the session, pauses with it, and stops when
+        all challenges are solved. Players can continue at zero.
+      </p>
       <ChallengeGraph
         game={game}
         change={(next) => setGame({ ...game, areas: next.areas })}
@@ -771,18 +792,20 @@ export function GameEditor({
                 <div className="editor-item" key={n}>
                   <div className="editor-item-header">
                     <span id={`action-${i}-${n}-label`}>
-                      {action.type === "lights"
-                        ? "Light transition"
-                        : action.type === "control"
-                          ? "Home Assistant control"
-                          : action.type === "vacuum"
-                            ? "Robot vacuum"
-                            : "Speaker entity"}
+                      {action.type === "timer"
+                        ? "Game timer"
+                        : action.type === "lights"
+                          ? "Light transition"
+                          : action.type === "control"
+                            ? "Home Assistant control"
+                            : action.type === "vacuum"
+                              ? "Robot vacuum"
+                              : "Speaker entity"}
                     </span>
                     <RemoveButton
                       label="Remove action"
                       configured={
-                        action.type === "lights"
+                        action.type === "timer" || action.type === "lights"
                           ? true
                           : action.type === "control"
                             ? !!action.controlId || action.on === false
@@ -797,7 +820,59 @@ export function GameEditor({
                       }
                     />
                   </div>
-                  {action.type === "lights" ? (
+                  {action.type === "timer" ? (
+                    <>
+                      <label>
+                        Timer action
+                        <select
+                          value={action.mode}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? {
+                                      ...action,
+                                      mode: e.target.value as
+                                        "start" | "extend",
+                                    }
+                                  : v,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="extend">
+                            Add time (starts a timer if none exists)
+                          </option>
+                          <option value="start">
+                            Start a new countdown (replaces remaining time)
+                          </option>
+                        </select>
+                      </label>
+                      <label>
+                        Minutes
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={10080}
+                          step={1}
+                          value={action.minutes}
+                          onChange={(e) =>
+                            patch(i, {
+                              onComplete: a.onComplete!.map((v, k) =>
+                                k === n
+                                  ? {
+                                      ...action,
+                                      minutes: Number(e.target.value),
+                                    }
+                                  : v,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  ) : action.type === "lights" ? (
                     <LightTransitionEditor
                       value={action}
                       controls={game.controls}
@@ -908,6 +983,21 @@ export function GameEditor({
                 </div>
               ))}
               <div className="actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={(a.onComplete?.length || 0) >= 10}
+                  onClick={() =>
+                    patch(i, {
+                      onComplete: [
+                        ...(a.onComplete || []),
+                        { type: "timer", mode: "extend", minutes: 5 },
+                      ],
+                    })
+                  }
+                >
+                  Add timer action
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

@@ -14,6 +14,7 @@ const draftSchema = z.object({
     name: z.string(),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    timeLimitMinutes: z.number().optional(),
     clues: z
       .array(
         z.object({
@@ -50,6 +51,11 @@ const draftSchema = z.object({
         onComplete: z
           .array(
             z.discriminatedUnion("type", [
+              z.object({
+                type: z.literal("timer"),
+                mode: z.enum(["start", "extend"]),
+                minutes: z.number(),
+              }),
               vacuumDraftSchema,
               z.object({
                 type: z.literal("lights"),

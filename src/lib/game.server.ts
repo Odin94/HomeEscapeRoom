@@ -13,6 +13,11 @@ import { resolve, join } from "node:path";
 import { lightTransitionSchema } from "./light-transition";
 import { vacuumSchema } from "./vacuum";
 export const actionSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("timer"),
+    mode: z.enum(["start", "extend"]),
+    minutes: z.number().int().min(1).max(10080),
+  }),
   lightTransitionSchema,
   vacuumSchema,
   z.strictObject({
@@ -35,6 +40,7 @@ export const gameSchema = z
     name: z.string().trim().min(1).max(80),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    timeLimitMinutes: z.number().int().min(1).max(10080).optional(),
     clues: z.array(clueSchema).max(50).optional(),
     areas: z
       .array(

@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "../src/lib/store.server";
-import { sessions } from "../src/lib/schema.server";
+import { sessionTimers, sessions } from "../src/lib/schema.server";
 import { gameSchema, loadGames } from "../src/lib/game.server";
 
 test("retired password challenges migrate in saved snapshots without losing session data", () => {
@@ -23,7 +23,7 @@ test("retired password challenges migrate in saved snapshots without losing sess
   try {
     const db = openStore(path);
     db.$client.exec(
-      "DELETE FROM __drizzle_migrations WHERE id >= (SELECT id FROM __drizzle_migrations ORDER BY id DESC LIMIT 1 OFFSET 1)",
+      "DELETE FROM __drizzle_migrations WHERE id >= (SELECT id FROM __drizzle_migrations ORDER BY id DESC LIMIT 1 OFFSET 2)",
     );
     db.$client
       .prepare(
@@ -40,7 +40,9 @@ test("retired password challenges migrate in saved snapshots without losing sess
         "INSERT INTO players(token,name,session_id) VALUES ('player','Ada','room')",
       )
       .run();
-    db.$client.exec("DROP TABLE challenge_completions");
+    db.$client.exec(
+      "DROP TABLE session_timers; DROP TABLE challenge_completions",
+    );
     db.$client.close();
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -128,7 +130,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         db.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        5,
+        6,
       );
     } finally {
       db.$client.close();
@@ -140,7 +142,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         reopened.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        5,
+        6,
       );
     } finally {
       reopened.$client.close();
@@ -171,6 +173,40 @@ test("incompatible legacy schemas fail before migration history is recorded", ()
       );
     } finally {
       check.close();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("session countdown survives reopening the database", () => {
+  const directory = mkdtempSync(join(tmpdir(), "threshold-timer-"));
+  const path = join(directory, "timer.sqlite");
+  try {
+    const db = openStore(path);
+    db.insert(sessions).values({ id: "timer", name: "Timer" }).run();
+    db.insert(sessionTimers)
+      .values({ session_id: "timer", remaining_ms: 90000, resumed_at: 123456 })
+      .run();
+    db.$client.close();
+    const reopened = openStore(path);
+    try {
+      assert.deepEqual(reopened.select().from(sessionTimers).get(), {
+        session_id: "timer",
+        remaining_ms: 90000,
+        resumed_at: 123456,
+      });
+      assert.equal(
+        reopened.$client.prepare("PRAGMA integrity_check").get()!
+          .integrity_check,
+        "ok",
+      );
+      assert.deepEqual(
+        reopened.$client.prepare("PRAGMA foreign_key_check").all(),
+        [],
+      );
+    } finally {
+      reopened.$client.close();
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
