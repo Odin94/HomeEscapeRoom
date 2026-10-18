@@ -541,3 +541,132 @@ test("hidden QR finding clues appear only at the current challenge", async () =>
       );
   }
 });
+
+test("parallel challenges share out-of-order completions and protect revealed clue files", async () => {
+  const gm = (await call({ action: "login", key: settings().adminKey })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const game = {
+    id: "parallel-api",
+    name: "Parallel API",
+    controls: [],
+    clues: [
+      {
+        id: "note",
+        name: "Note",
+        kind: "markdown",
+        content: "**Secret note**",
+      },
+      {
+        id: "photo",
+        name: "Photo",
+        kind: "image",
+        content: "data:image/png;base64,YQ==",
+      },
+    ],
+    areas: [
+      {
+        id: "a",
+        name: "Alpha",
+        kind: "text",
+        hint: "Alpha hint",
+        description: "Alpha solved",
+        unlockCode: "alpha",
+        requires: [],
+        revealClues: ["note", "photo"],
+      },
+      {
+        id: "b",
+        name: "Beta",
+        kind: "text",
+        hint: "Beta hint",
+        description: "Beta solved",
+        unlockCode: "beta",
+        requires: [],
+      },
+      {
+        id: "c",
+        name: "Final",
+        kind: "text",
+        hint: "Final hint",
+        description: "Final solved",
+        unlockCode: "final",
+        requires: ["a", "b"],
+      },
+    ],
+  };
+  assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+  const { id } = await (
+    await call({ action: "create", name: "Parallel", gameId: game.id }, gm)
+  ).json();
+  const p = (await call({ action: "join", id, name: "One" })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const q = (await call({ action: "join", id, name: "Two" })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const media = (cookie: string) =>
+    handle(
+      new Request(`${origin}/api/game?clue=photo`, { headers: { cookie } }),
+    );
+  assert.equal((await media(p)).status, 404);
+  assert.equal((await media(gm)).status, 404);
+  await call({ action: "status", id, status: "running" }, gm);
+  let state = await (await call(undefined, p)).json();
+  assert.deepEqual(
+    state.areas
+      .filter((a: { available: boolean }) => a.available)
+      .map((a: { id: string }) => a.id),
+    ["a", "b"],
+  );
+  assert.deepEqual(state.clues, []);
+  assert.equal(state.areas[2].hint, "");
+  assert.equal(
+    (await call({ action: "unlock", challengeId: "c", code: "final" }, p))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await call({ action: "unlock", challengeId: "b", code: "beta" }, p))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await call({ action: "unlock", challengeId: "b", code: "beta" }, q))
+      .status,
+    400,
+  );
+  state = await (await call(undefined, q)).json();
+  assert.equal(state.areas[1].solved, true);
+  assert.equal(state.areas[0].solved, false);
+  assert.equal(state.player.session.progress, 1);
+  assert.deepEqual(state.clues, []);
+  assert.equal(
+    (await call({ action: "unlock", challengeId: "a", code: "alpha" }, q))
+      .status,
+    200,
+  );
+  state = await (await call(undefined, p)).json();
+  assert.equal(state.areas[2].available, true);
+  assert.equal(state.clues[0].content, "**Secret note**");
+  assert.equal(state.clues[1].content, "/api/game?clue=photo");
+  assert.equal((await media(p)).headers.get("content-type"), "image/png");
+  assert.equal(await (await media(q)).text(), "a");
+  assert.equal((await media("")).status, 404);
+  // Changing the template cannot alter clues or prerequisites in this session.
+  game.clues[0].content = "Changed";
+  await call({ action: "save-game", game }, gm);
+  assert.equal(
+    (await (await call(undefined, p)).json()).clues[0].content,
+    "**Secret note**",
+  );
+  assert.equal(
+    (await call({ action: "unlock", challengeId: "c", code: "final" }, p))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await (await call(undefined, q)).json()).player.session.progress,
+    3,
+  );
+});

@@ -1,9 +1,11 @@
+import { availableChallenges, revealedClues } from "./challenge-progress";
 import { moveVacuum } from "./vacuum.server";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { AlexaAnswers } from "./alexa-answers.server";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
+  challengeCompletions,
   actionRuns,
   sessionAutomation,
   admins,
@@ -67,20 +69,50 @@ function definition(id: string) {
   if (!saved) throw new Error("Session game definition not found.");
   return gameSchema.parse(JSON.parse(saved.definition));
 }
+// Backfill original linear progress once; later completions are tracked by ID.
+for (const existing of db.select().from(sessions).all()) {
+  const game = definition(existing.id);
+  if (
+    !db
+      .select()
+      .from(challengeCompletions)
+      .where(eq(challengeCompletions.session_id, existing.id))
+      .get()
+  )
+    for (const area of game.areas.slice(0, existing.progress))
+      db.insert(challengeCompletions)
+        .values({
+          id: `${existing.id}:${area.id}`,
+          session_id: existing.id,
+          challenge_id: area.id,
+        })
+        .run();
+}
+function solved(id: string) {
+  return db
+    .select()
+    .from(challengeCompletions)
+    .where(eq(challengeCompletions.session_id, id))
+    .all()
+    .map((c) => c.challenge_id);
+}
 const alexaAnswers = new AlexaAnswers(
   join(dirname(databasePath), "alexa-answers.json"),
   ({ sessionId, challengeId }) => {
     if (closing) return;
     try {
       const s = session(sessionId);
-      const area = definition(sessionId).areas[s.progress];
+      const area = availableChallenges(
+        definition(sessionId),
+        solved(sessionId),
+      ).find((a) => a.id === challengeId);
       if (
         s.status === "running" &&
         area?.kind === "external" &&
         area.id === challengeId &&
         !pending(sessionId).length
       )
-        return `${sessionId}:${s.progress}`;
+        return `${sessionId}:${challengeId}`;
     } catch {
       /* Removed sessions cannot receive answers. */
     }
@@ -304,7 +336,15 @@ async function complete(
 ) {
   const s = session(id),
     game = definition(id),
-    area = game.areas[s.progress];
+    area = availableChallenges(game, solved(id)).find((a) => {
+      if (challenge !== undefined) return a.id === challenge;
+      try {
+        nextUnlock(game.areas.indexOf(a), code, game);
+        return (a.kind === "external") === external;
+      } catch {
+        return false;
+      }
+    });
   if (s.status !== "running")
     throw new Error("Your game master needs to start or resume the game.");
   if (pending(id).length)
@@ -317,7 +357,8 @@ async function complete(
     ((external || challenge !== undefined) && area.id !== challenge)
   )
     throw new Error("This challenge is not accepting that answer source.");
-  const progress = nextUnlock(s.progress, code, game);
+  nextUnlock(game.areas.indexOf(area), code, game);
+  const progress = s.progress + 1;
   db.transaction((tx) => {
     const updated = tx
       .update(sessions)
@@ -326,6 +367,9 @@ async function complete(
       .run();
     if (!updated.changes)
       throw new Error("This challenge has already been completed.");
+    tx.insert(challengeCompletions)
+      .values({ id: `${id}:${area.id}`, session_id: id, challenge_id: area.id })
+      .run();
     for (const [index, action] of (area.onComplete || []).entries())
       tx.insert(actionRuns)
         .values({
@@ -378,25 +422,62 @@ export async function handle(request: Request) {
     const isAdmin = admin(request),
       p = player(request);
     if (request.method === "GET") {
+      const clueId = new URL(request.url).searchParams.get("clue");
+      if (clueId !== null) {
+        const clue =
+          p &&
+          revealedClues(definition(p.session_id), solved(p.session_id)).find(
+            (c) => c.id === clueId && c.kind !== "markdown",
+          );
+        if (!clue) return new Response("Clue not found", { status: 404 });
+        const [metadata, data] = clue.content.split(",");
+        return new Response(Buffer.from(data, "base64"), {
+          headers: {
+            "content-type": metadata.slice(5).split(";")[0],
+            "cache-control": "private, no-store",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
       const games = loadGames();
       const active = p ? definition(p.session_id) : games[0];
       const areas = active?.areas || [];
+      const completed = p ? solved(p.session_id) : [];
+      const available = p
+        ? availableChallenges(active, completed).map((a) => a.id)
+        : [];
       return reply({
         designScheme: p ? active?.designScheme || "standard" : "standard",
         automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,
         demo: !settings().haUrl,
         adminConfigured: !!settings().adminKey,
-        areas: areas.map((area, index) =>
+        clues: p
+          ? revealedClues(active, completed).map((c) => ({
+              ...c,
+              content:
+                c.kind === "markdown"
+                  ? c.content
+                  : `/api/game?clue=${encodeURIComponent(c.id)}`,
+            }))
+          : [],
+        areas: areas.map((area) =>
           isAdmin
-            ? { ...area, unlockCode: area.unlockCode }
+            ? {
+                ...area,
+                unlockCode: area.unlockCode,
+                available: available.includes(area.id),
+                solved: completed.includes(area.id),
+              }
             : {
                 id: area.id,
+                available: available.includes(area.id),
+                solved: completed.includes(area.id),
                 kind:
                   area.kind === "qr" && area.qrMode !== "prompted"
                     ? "hidden"
                     : area.kind,
-                ...(p && index === session(p.session_id).progress
+                ...(p && available.includes(area.id)
                   ? { choices: area.choices }
                   : {}),
                 ...(area.kind === "qr" && area.qrMode === "prompted"
@@ -404,17 +485,13 @@ export async function handle(request: Request) {
                   : {}),
                 playerView: area.playerView,
                 name:
-                  p && index < session(p.session_id).progress
+                  p &&
+                  (completed.includes(area.id) || available.includes(area.id))
                     ? area.name
                     : "An unopened door",
-                hint:
-                  p && index === session(p.session_id).progress
-                    ? area.hint
-                    : "",
+                hint: p && available.includes(area.id) ? area.hint : "",
                 description:
-                  p && index < session(p.session_id).progress
-                    ? area.description
-                    : "",
+                  p && completed.includes(area.id) ? area.description : "",
               },
         ),
         sessions: db
@@ -690,7 +767,9 @@ export async function handle(request: Request) {
     }
     if (action === "advance") {
       const s = session(body.id),
-        area = definition(s.id).areas[s.progress];
+        area = availableChallenges(definition(s.id), solved(s.id)).find(
+          (a) => !body.challengeId || a.id === body.challengeId,
+        );
       if (!area) throw new Error("All areas are unlocked.");
       await complete(s.id, area.unlockCode, area.kind === "external", area.id);
       return reply({ ok: true });

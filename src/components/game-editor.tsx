@@ -1,3 +1,6 @@
+import { ChallengeGraph } from "./challenge-graph";
+import { ClueEditor } from "./clue-editor";
+import { prerequisites } from "../lib/challenge-progress";
 import { designSchemes, type DesignScheme } from "../lib/design-scheme";
 import type { VacuumAction } from "../lib/vacuum";
 import { GameMarkdown } from "./game-markdown";
@@ -197,7 +200,15 @@ export function GameEditor({
   const patch = (index: number, value: Partial<Area>) =>
     setGame({
       ...game,
-      areas: game.areas.map((a, i) => (i === index ? { ...a, ...value } : a)),
+      areas: game.areas.map((a, i) => ({
+        ...(i === index ? { ...a, ...value } : a),
+        requires: (i === index && "requires" in value
+          ? value.requires
+          : a.requires
+        )?.map((id) =>
+          value.id && id === game.areas[index].id ? value.id : id,
+        ),
+      })),
     });
   return (
     <form
@@ -310,12 +321,53 @@ export function GameEditor({
         Names, clues, stories, and symbol choices support Markdown. Use
         **bold**, *italic*, and `code`; clues and stories also support headings,
         lists, links, and images. IDs, answers, device settings, and spoken text
-        are literal. 1–30 challenges, played in order. IDs must be unique
-        lowercase slugs. Saving replaces this game's JSON file; existing
-        sessions keep their snapshot.
+        are literal. 1–30 challenges; prerequisites control which can be solved
+        together. IDs must be unique lowercase slugs. Saving replaces this
+        game's JSON file; existing sessions keep their snapshot.
       </p>
+      <ChallengeGraph
+        game={game}
+        select={(index) => {
+          const section = document.getElementById(
+            `challenge-editor-${index}`,
+          ) as HTMLDetailsElement | null;
+          if (section) {
+            section.open = true;
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+            section
+              .querySelector<HTMLInputElement>("input")
+              ?.focus({ preventScroll: true });
+          }
+        }}
+      />
+      <ClueEditor
+        clues={game.clues || []}
+        change={(clues) => {
+          const renamed = new Map(
+            (game.clues || []).map((c, i) => [
+              c.id,
+              clues.length === game.clues?.length ? clues[i].id : c.id,
+            ]),
+          );
+          setGame({
+            ...game,
+            clues,
+            areas: game.areas.map((a) => ({
+              ...a,
+              revealClues: a.revealClues
+                ?.map((id) => renamed.get(id) || id)
+                .filter((id) => clues.some((c) => c.id === id)),
+            })),
+          });
+        }}
+      />
       {game.areas.map((a, i) => (
-        <details className="challenge-editor" key={i} open>
+        <details
+          className="challenge-editor"
+          id={`challenge-editor-${i}`}
+          key={i}
+          open
+        >
           <summary>
             Challenge {i + 1}: {a.name || "Unnamed room"}
             <RemoveButton
@@ -337,7 +389,12 @@ export function GameEditor({
               remove={() =>
                 setGame({
                   ...game,
-                  areas: game.areas.filter((_, n) => n !== i),
+                  areas: game.areas
+                    .filter((_, n) => n !== i)
+                    .map((area) => ({
+                      ...area,
+                      requires: area.requires?.filter((id) => id !== a.id),
+                    })),
                 })
               }
             />
@@ -362,6 +419,83 @@ export function GameEditor({
                 onChange={(e) => patch(i, { name: e.target.value })}
               />
             </label>
+            <fieldset>
+              <legend>Available after</legend>
+              <label>
+                Prerequisite mode
+                <select
+                  value={a.requires === undefined ? "sequential" : "custom"}
+                  onChange={(e) =>
+                    patch(i, {
+                      requires:
+                        e.target.value === "sequential" ? undefined : [],
+                    })
+                  }
+                >
+                  <option value="sequential">
+                    Previous challenge (in order)
+                  </option>
+                  <option value="custom">
+                    Choose prerequisites / active from start
+                  </option>
+                </select>
+              </label>
+              {a.requires !== undefined && (
+                <>
+                  <p>
+                    Leave all unchecked to make this challenge active from the
+                    start. Selected challenges must all be solved first.
+                  </p>
+                  {game.areas
+                    .filter((other) => other.id !== a.id)
+                    .map((other) => (
+                      <label key={other.id}>
+                        <input
+                          type="checkbox"
+                          checked={a.requires!.includes(other.id)}
+                          onChange={(e) =>
+                            patch(i, {
+                              requires: e.target.checked
+                                ? [...a.requires!, other.id]
+                                : a.requires!.filter((id) => id !== other.id),
+                            })
+                          }
+                        />
+                        {other.name}
+                      </label>
+                    ))}
+                </>
+              )}
+              <small>
+                {prerequisites(game, i).length
+                  ? `Requires: ${prerequisites(game, i).join(", ")}`
+                  : "Active from the start"}
+              </small>
+            </fieldset>
+            <fieldset>
+              <legend>Reveal clues when solved</legend>
+              {!(game.clues || []).length && (
+                <p>Add clues to the library above first.</p>
+              )}
+              {(game.clues || []).map((clue) => (
+                <label key={clue.id}>
+                  <input
+                    type="checkbox"
+                    checked={(a.revealClues || []).includes(clue.id)}
+                    onChange={(e) =>
+                      patch(i, {
+                        revealClues: e.target.checked
+                          ? [...(a.revealClues || []), clue.id]
+                          : (a.revealClues || []).filter(
+                              (id) => id !== clue.id,
+                            ),
+                      })
+                    }
+                  />
+                  {clue.name}
+                </label>
+              ))}
+            </fieldset>
             <label>
               Challenge type
               <select

@@ -23,7 +23,7 @@ test("retired password challenges migrate in saved snapshots without losing sess
   try {
     const db = openStore(path);
     db.$client.exec(
-      "DELETE FROM __drizzle_migrations WHERE id = (SELECT max(id) FROM __drizzle_migrations)",
+      "DELETE FROM __drizzle_migrations WHERE id >= (SELECT id FROM __drizzle_migrations ORDER BY id DESC LIMIT 1 OFFSET 1)",
     );
     db.$client
       .prepare(
@@ -40,6 +40,7 @@ test("retired password challenges migrate in saved snapshots without losing sess
         "INSERT INTO players(token,name,session_id) VALUES ('player','Ada','room')",
       )
       .run();
+    db.$client.exec("DROP TABLE challenge_completions");
     db.$client.close();
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -55,6 +56,15 @@ test("retired password challenges migrate in saved snapshots without losing sess
           game,
         );
         assert.equal(migrated.select().from(sessions).get()!.progress, 2);
+        assert.deepEqual(
+          migrated.$client
+            .prepare(
+              "SELECT challenge_id FROM challenge_completions WHERE session_id='room' ORDER BY rowid",
+            )
+            .all()
+            .map((r) => r.challenge_id),
+          game.areas.slice(0, 2).map((a) => a.id),
+        );
         assert.equal(migrated.select().from(sessions).get()!.status, "paused");
         assert.equal(
           migrated.$client
@@ -118,7 +128,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         db.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        4,
+        5,
       );
     } finally {
       db.$client.close();
@@ -130,7 +140,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         reopened.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        4,
+        5,
       );
     } finally {
       reopened.$client.close();

@@ -1,3 +1,5 @@
+import { clueSchema } from "./clue";
+import { prerequisites } from "./challenge-progress";
 import { designSchemeIds } from "./design-scheme";
 import { z } from "zod";
 import {
@@ -33,6 +35,7 @@ export const gameSchema = z
     name: z.string().trim().min(1).max(80),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    clues: z.array(clueSchema).max(50).optional(),
     areas: z
       .array(
         z
@@ -50,6 +53,8 @@ export const gameSchema = z
               "symbols",
               "external",
             ]),
+            requires: z.array(z.string()).max(30).optional(),
+            revealClues: z.array(z.string()).max(50).optional(),
             onComplete: z.array(actionSchema).max(10).optional(),
             qrMode: z.enum(["prompted", "hidden"]).optional(),
             choices: z
@@ -123,6 +128,34 @@ export const gameSchema = z
       ),
   })
   .superRefine((game, ctx) => {
+    const issue = (message: string) =>
+      ctx.addIssue({ code: "custom", message });
+    const clues = game.clues || [];
+    if (new Set(clues.map((c) => c.id)).size !== clues.length)
+      issue("Clue IDs must be unique.");
+    if (clues.reduce((size, c) => size + c.content.length, 0) > 32_000_000)
+      issue("Clue files must total less than 24 MB.");
+    const visiting = new Set<string>(),
+      visited = new Set<string>();
+    function visit(index: number) {
+      const area = game.areas[index];
+      if (visiting.has(area.id)) {
+        issue("Challenge prerequisites must not contain cycles.");
+        return;
+      }
+      if (visited.has(area.id)) return;
+      visiting.add(area.id);
+      for (const id of prerequisites(game, index)) {
+        const other = game.areas.findIndex((a) => a.id === id);
+        if (other < 0) issue(`Unknown prerequisite: ${id}`);
+        else visit(other);
+      }
+      visiting.delete(area.id);
+      visited.add(area.id);
+      for (const id of area.revealClues || [])
+        if (!clues.some((c) => c.id === id)) issue(`Unknown clue: ${id}`);
+    }
+    game.areas.forEach((_, index) => visit(index));
     for (const area of game.areas)
       for (const action of area.onComplete || []) {
         if (

@@ -1,3 +1,4 @@
+import type { Clue } from "./clue";
 import type { DesignScheme } from "./design-scheme";
 import { createStore } from "zustand/vanilla";
 import type { VacuumAction } from "./vacuum";
@@ -7,6 +8,7 @@ export type Game = {
   id: string;
   name: string;
   areas: Area[];
+  clues?: Clue[];
   designScheme?: DesignScheme;
   autoStart?: boolean;
   controls: { id: string; name: string; entity: string }[];
@@ -15,6 +17,10 @@ export type Area = {
   id: string;
   name: string;
   kind: string;
+  requires?: string[];
+  revealClues?: string[];
+  available?: boolean;
+  solved?: boolean;
   onComplete?: (
     | VacuumAction
     | LightTransition
@@ -46,6 +52,7 @@ export type State = {
   sessions: Session[];
   games?: Game[];
   areas: Area[];
+  clues?: Clue[];
   settings?: { haUrl: string; tokenConfigured: boolean; publicUrl: string };
   player: { name: string; session_id: string; session: Session } | null;
   automationPending?: boolean;

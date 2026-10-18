@@ -14,6 +14,16 @@ const draftSchema = z.object({
     name: z.string(),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    clues: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          kind: z.enum(["markdown", "image", "audio", "video"]),
+          content: z.string(),
+        }),
+      )
+      .optional(),
     controls: z.array(
       z.object({ id: z.string(), name: z.string(), entity: z.string() }),
     ),
@@ -22,6 +32,8 @@ const draftSchema = z.object({
         id: z.string(),
         name: z.string(),
         kind: z.string(),
+        requires: z.array(z.string()).optional(),
+        revealClues: z.array(z.string()).optional(),
         hint: z.string(),
         description: z.string(),
         unlockCode: z.string().optional(),

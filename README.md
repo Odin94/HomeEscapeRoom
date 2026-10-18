@@ -214,3 +214,29 @@ go-to command without starting room cleaning. Home Assistant room names alone
 do not supply go-to coordinates. Verify your coordinates and movement presets
 with your vacuum before using them in a live game. Saving a game does not move
 any devices; actions run after the challenge is solved.
+
+### Parallel challenges and clue rewards
+
+In the game editor, each challenge's **Available after** setting defaults to the
+previous challenge for compatibility with existing games. Choose **Choose
+prerequisites / active from start** and leave the list empty to open several
+challenges immediately. Select prerequisites to require all of them before a
+challenge becomes active. Different challenges can unlock independent branches.
+The editor's **Challenge flow** graph shows the paths and joins; select a node to
+jump to its settings. Players can switch between active challenges; solving
+one updates the whole team. Completion requires solving every challenge.
+
+The **Clue library** holds standalone Markdown, image, audio and video clues.
+Write Markdown or choose a file (up to 5 MB per file and 24 MB total). Supported
+images are PNG, JPEG, GIF and WebP; audio/video playback depends on browser codec
+support. Use **Reveal clues when solved** on each challenge to choose rewards.
+A clue may be revealed by more than one challenge and appears only once. Players
+can reopen revealed clues throughout the session, with rendered Markdown and
+native audio/video controls. Unrevealed clue content is withheld by the server.
+
+Game JSON uses optional `clues` (`id`, `name`, `kind`, `content`), challenge
+`requires` (prerequisite IDs), and `revealClues` (clue IDs). Omitted `requires`
+keeps sequential play; `[]` starts immediately. Media files are embedded as data
+URLs in the game definition and its session snapshot; player media is served
+through an authenticated endpoint. Existing sessions keep their definitions,
+clues and completed challenges across game edits and server restarts.

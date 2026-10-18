@@ -1,3 +1,4 @@
+import { ClueView } from "./clue-view";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
 import {
@@ -52,6 +53,12 @@ export function App() {
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
   const [joinSession, setJoinSession] = useState("");
   const [code, setCode] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [incomingMarker, setIncomingMarker] = useState("");
+  const activeArea =
+    state?.areas.find((a) => a.available && a.id === challenge) ||
+    state?.areas.find((a) => a.available);
   const refresh = useCallback(async () => {
     try {
       const next: State = await api();
@@ -81,6 +88,7 @@ export function App() {
     window.addEventListener("focus", resume);
     setJoinSession(new URLSearchParams(location.search).get("session") || "");
     setCode(new URLSearchParams(location.search).get("code") || "");
+    setIncomingMarker(new URLSearchParams(location.search).get("code") || "");
     return () => {
       clearInterval(timer);
       window.removeEventListener("focus", resume);
@@ -143,12 +151,17 @@ export function App() {
       busy
     )
       return;
-    const area = state.areas[state.player.session.progress];
+    const area = incomingMarker
+      ? state.areas.find(
+          (a) => a.available && ["qr", "hidden"].includes(a.kind),
+        )
+      : activeArea;
     if (!area || !["qr", "hidden"].includes(area.kind)) return;
-    const token = code;
+    const token = incomingMarker || code;
+    setIncomingMarker("");
     setCode("");
     history.replaceState(null, "", "/");
-    void act({ action: "unlock", code: token, challengeId: area.id });
+    void act({ action: "unlock", code: token });
   }, [
     code,
     busy,
@@ -156,6 +169,8 @@ export function App() {
     state?.player?.session.status,
     state?.player?.session.progress,
     state?.automationPending,
+    activeArea?.id,
+    incomingMarker,
   ]);
   function submit(e: FormEvent<HTMLFormElement>, action: string) {
     e.preventDefault();
@@ -662,12 +677,51 @@ export function App() {
               </p>
             )}
             {state.areas
-              .filter((_, i) => i < state.player!.session.progress)
+              .filter((a) => a.solved)
               .map((a) => (
                 <section key={a.id} data-view={a.playerView || "narrative"}>
                   <GameMarkdown>{a.description}</GameMarkdown>
                 </section>
               ))}
+            {!!state.clues?.length && (
+              <section aria-label="Clues">
+                <h2>Clues</h2>
+                {state.clues.map((clue) => (
+                  <details key={clue.id}>
+                    <summary>{clue.name}</summary>
+                    <ClueView clue={clue} />
+                  </details>
+                ))}
+              </section>
+            )}
+            {state.areas.filter((a) => a.available).length > 1 && (
+              <nav
+                className="challenge-switcher"
+                aria-label="Active challenges"
+              >
+                {state.areas
+                  .filter((a) => a.available)
+                  .map((a) => (
+                    <Button
+                      key={a.id}
+                      variant={activeArea?.id === a.id ? "default" : "outline"}
+                      aria-pressed={activeArea?.id === a.id}
+                      onClick={() => {
+                        if (activeArea)
+                          setAnswers((previous) => ({
+                            ...previous,
+                            [activeArea.id]: code,
+                          }));
+                        setChallenge(a.id);
+                        setCode(answers[a.id] || "");
+                        history.replaceState(null, "", "/");
+                      }}
+                    >
+                      <GameMarkdown inline>{a.name}</GameMarkdown>
+                    </Button>
+                  ))}
+              </nav>
+            )}
             {state.automationPending && (
               <p role="status">
                 Waiting for room actions. Ask your game master to check
@@ -678,7 +732,7 @@ export function App() {
               !state.automationPending && (
                 <p role="status">All challenges solved!</p>
               )}
-            {state.player.session.progress < state.areas.length && (
+            {activeArea && (
               <form
                 className="unlock"
                 onSubmit={(e) => {
@@ -686,7 +740,7 @@ export function App() {
                   void act({
                     action: "unlock",
                     code,
-                    challengeId: state.areas[state.player!.session.progress].id,
+                    challengeId: activeArea.id,
                   }).then((ok) => {
                     if (ok) {
                       setCode("");
@@ -695,14 +749,12 @@ export function App() {
                   });
                 }}
               >
-                {state.areas[state.player.session.progress]?.hint && (
-                  <GameMarkdown>
-                    {state.areas[state.player.session.progress].hint}
-                  </GameMarkdown>
+                {activeArea.hint && (
+                  <GameMarkdown>{activeArea.hint}</GameMarkdown>
                 )}
                 <ChallengeInput
-                  key={`${state.player.session_id}-${state.player.session.progress}`}
-                  area={state.areas[state.player.session.progress]}
+                  key={`${state.player.session_id}-${activeArea.id}`}
+                  area={activeArea}
                   code={code}
                   setCode={setCode}
                   disabled={

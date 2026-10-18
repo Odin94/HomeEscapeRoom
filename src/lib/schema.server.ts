@@ -51,3 +51,11 @@ export const actionRuns = sqliteTable("action_runs", {
   status: text("status").notNull().default("pending"),
   error: text("error"),
 });
+
+export const challengeCompletions = sqliteTable("challenge_completions", {
+  id: text("id").primaryKey(),
+  session_id: text("session_id")
+    .notNull()
+    .references(() => sessions.id),
+  challenge_id: text("challenge_id").notNull(),
+});
