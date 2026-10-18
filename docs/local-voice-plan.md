@@ -1,6 +1,8 @@
 # Local phone voice integration
 
-Created: 2026-10-18. Status: implementation plan; no voice functionality has been implemented by this document.
+Created: 2026-10-18. Status: local voice implemented locally behind the GM setting; physical phone/HTTPS/Bluetooth acceptance remains pending. See [operator guide and measured local runtime evidence](local-voice-operator.md).
+
+Implemented: HTTPS proxy configuration and origin handling, bounded uploads and decoding, isolated Silero ONNX fallback before Whisper, transcript review for text challenges, authenticated visible-text Piper output, and a GM room player with leases and at-most-once delivery. Existing Home Assistant actions remain compatible. Runtime models are pinned and checksum-verified outside Git. The phase ordering below remains the design and acceptance checklist; pending hardware checks are not claimed complete.
 
 ## Goal
 

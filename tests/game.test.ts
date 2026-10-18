@@ -14,7 +14,8 @@ test("wrong and out-of-order clues never advance progression", () => {
 
 import { gameSchema, loadGames, saveGame } from "../src/lib/game.server";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const makeGame = (area: Record<string, unknown>) => ({
   id: "test-game",
@@ -81,7 +82,7 @@ test("creation rejects unknown fields, invalid combinations and malformed sequen
 });
 test("game saves round-trip through readable JSON files", () => {
   const previous = process.env.GAMES_PATH;
-  const directory = mkdtempSync(resolve("artifacts/game-json-"));
+  const directory = mkdtempSync(join(tmpdir(), "threshold-game-json-"));
   try {
     process.env.GAMES_PATH = directory;
     const game = saveGame(

@@ -251,3 +251,14 @@ cancels a pending connection. **Auto arrange** restores the automatic layout.
 Layout changes preserve unlock rules; arrow changes update prerequisites, reject
 cycles and take effect in new sessions after **Save game**. Existing sessions
 retain their snapshots.
+
+## Local phone voice
+
+Optional push-to-talk for text answers and local spoken playback are available
+behind the GM Settings voice switch. Install the local runtimes/models and use a
+trusted HTTPS origin before enabling it. Transcripts are reviewed in the ordinary
+answer field; typed play remains available. Phone output is the default; a GM
+can designate one room playback device. See the [operator guide](docs/local-voice-operator.md)
+for setup, limits and pending physical-device rehearsals, and the original
+[implementation plan](docs/local-voice-plan.md) for the design. Hardware latency,
+iPhone/Android and Bluetooth acceptance are still pending rehearsal.
