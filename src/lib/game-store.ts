@@ -11,6 +11,7 @@ export type Game = {
   clues?: Clue[];
   designScheme?: DesignScheme;
   autoStart?: boolean;
+  joinChallengeId?: string;
   timeLimitMinutes?: number;
   controls: { id: string; name: string; entity: string }[];
 };
@@ -46,6 +47,8 @@ type Session = {
   progress: number;
   players?: number;
   acceptingPlayers?: boolean;
+  designScheme?: DesignScheme;
+  gameName?: string;
   timer?: { remainingMs: number; measuredAt: number; running: boolean } | null;
 };
 export type State = {
@@ -68,6 +71,7 @@ export type State = {
     voiceOutput: "phone" | "room";
   };
   player: { name: string; session_id: string; session: Session } | null;
+  storyOrder?: string[];
   automationPending?: boolean;
   automation?: {
     id: string;

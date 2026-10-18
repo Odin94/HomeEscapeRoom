@@ -40,6 +40,7 @@ export const gameSchema = z
     name: z.string().trim().min(1).max(80),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    joinChallengeId: z.string().optional(),
     timeLimitMinutes: z.number().int().min(1).max(10080).optional(),
     clues: z.array(clueSchema).max(50).optional(),
     areas: z
@@ -143,6 +144,19 @@ export const gameSchema = z
   .superRefine((game, ctx) => {
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
+    if (game.joinChallengeId) {
+      const opening = game.areas.find((a) => a.id === game.joinChallengeId);
+      if (
+        !game.autoStart ||
+        !opening ||
+        opening.kind !== "qr" ||
+        (opening.requires?.length ?? 0) > 0 ||
+        game.areas.indexOf(opening) !== 0
+      )
+        issue(
+          "The join challenge must be the first QR challenge, without prerequisites, in an auto-start game.",
+        );
+    }
     const clues = game.clues || [];
     if (new Set(clues.map((c) => c.id)).size !== clues.length)
       issue("Clue IDs must be unique.");

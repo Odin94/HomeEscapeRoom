@@ -102,6 +102,7 @@ function solved(id: string) {
     .select()
     .from(challengeCompletions)
     .where(eq(challengeCompletions.session_id, id))
+    .orderBy(sql`rowid`)
     .all()
     .map((c) => c.challenge_id);
 }
@@ -410,20 +411,21 @@ async function complete(
         return false;
       }
     });
-  if (s.status !== "running")
-    throw new Error("Your game master needs to start or resume the game.");
+  if (s.status !== "running") throw new Error("The connection is on standby.");
   if (s.progress >= game.areas.length)
     throw new Error("Your team has already completed the game.");
-  if (pending(id).length)
-    throw new Error(
-      "Waiting for room actions. Ask the game master to check automation.",
-    );
   if (
     !area ||
     (area.kind === "external") !== external ||
     ((external || challenge !== undefined) && area.id !== challenge)
   )
-    throw new Error("This challenge is not accepting that answer source.");
+    throw new Error(
+      game.areas.some((a) => solved(id).includes(a.id) && a.unlockCode === code)
+        ? "This code has already been used."
+        : "This code is not valid here.",
+    );
+  if (pending(id).length)
+    throw new Error("Systems are responding. Try again in a moment.");
   nextUnlock(game.areas.indexOf(area), code, game);
   const progress = area.completesGame ? game.areas.length : s.progress + 1;
   db.transaction((tx) => {
@@ -526,9 +528,7 @@ function voiceAccess(request: Request, challengeId: string) {
     session(p.session_id).status !== "running" ||
     pending(p.session_id).length
   )
-    throw new Error(
-      "Voice is unavailable while the game is paused or waiting for room actions.",
-    );
+    throw new Error("Voice connection is temporarily unavailable.");
   const area = availableChallenges(
     definition(p.session_id),
     solved(p.session_id),
@@ -731,6 +731,7 @@ export async function handle(request: Request) {
           output: settings().voiceOutput,
         },
         designScheme: p ? active?.designScheme || "standard" : "standard",
+        storyOrder: completed,
         automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,
         demo: !settings().haUrl,
@@ -803,6 +804,8 @@ export async function handle(request: Request) {
           .all()
           .map((s) => ({
             ...s,
+            designScheme: definition(s.id).designScheme || "standard",
+            gameName: definition(s.id).name,
             acceptingPlayers:
               s.status === "open" ||
               (s.status === "running" && !!definition(s.id).autoStart),
@@ -892,6 +895,10 @@ export async function handle(request: Request) {
         .run();
       if (s.status === "open" && definition(s.id).autoStart)
         setSessionStatus(s.id, "running");
+      const game = definition(s.id);
+      const opening = game.areas.find((a) => a.id === game.joinChallengeId);
+      if (opening && !solved(s.id).includes(opening.id))
+        await complete(s.id, opening.unlockCode, false, opening.id);
       event(s.id, `${name} joined the game`);
       return reply(
         { ok: true },

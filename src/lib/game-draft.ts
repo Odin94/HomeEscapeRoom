@@ -14,6 +14,7 @@ const draftSchema = z.object({
     name: z.string(),
     designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
+    joinChallengeId: z.string().optional(),
     timeLimitMinutes: z.number().optional(),
     clues: z
       .array(

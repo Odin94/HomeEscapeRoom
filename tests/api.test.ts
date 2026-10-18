@@ -839,3 +839,44 @@ test("persistent timers start, pause, extend once, replace, expire and stop on c
     assert.equal((await current()).running, false);
   }
 });
+
+test("joining Restart Ship activates its opening once and exposes themed session metadata", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const { id } = await (
+    await call(
+      { action: "create", name: "Ship", gameId: "starship-restart" },
+      gm,
+    )
+  ).json();
+  const lobby = await (await call()).json();
+  assert.equal(
+    lobby.sessions.find((s: { id: string }) => s.id === id).designScheme,
+    "terminal",
+  );
+  const joined = await call({ action: "join", id, name: "Crew" });
+  assert.equal(joined.status, 200);
+  const p = joined.headers.get("set-cookie")!.split(";")[0];
+  const current = await (await call(undefined, p)).json();
+  assert.equal(current.player.session.progress, 1);
+  assert.deepEqual(current.storyOrder, ["boot"]);
+  assert.ok(
+    current.areas.filter((a: { kind: string }) => a.kind === "qr").length === 0,
+  );
+  assert.equal(
+    (await call({ action: "join", id, name: "Crew two" })).status,
+    200,
+  );
+  assert.equal(
+    (await (await call(undefined, p)).json()).player.session.progress,
+    1,
+  );
+  for (const [code, message] of [
+    ["87073809-4f0d-4aa2-91a3-7c126bfe8346", "already been used"],
+    ["invalid-marker", "not valid"],
+  ]) {
+    const result = await call({ action: "unlock", code }, p);
+    assert.equal(result.status, 400);
+    assert.match((await result.json()).error, new RegExp(message));
+  }
+});

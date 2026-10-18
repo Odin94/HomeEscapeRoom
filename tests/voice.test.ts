@@ -279,7 +279,7 @@ test("voice API preserves settings and enforces origin, membership, source, sess
     };
     const delayed = await upload("a", p);
     assert.equal(delayed.status, 400);
-    assert.match((await delayed.json()).error, /paused/);
+    assert.match((await delayed.json()).error, /temporarily unavailable/);
   } finally {
     globalThis.fetch = previousFetch;
     delete process.env.FAKE_VAD;

@@ -54,18 +54,39 @@ export function App() {
   const [creatingGame, setCreatingGame] = useState(false);
   const [qr, setQr] = useState("");
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
+  const [linkedSession, setLinkedSession] = useState("");
   const [joinSession, setJoinSession] = useState("");
   const [code, setCode] = useState("");
   const [voiceAnswer, setVoiceAnswer] = useState<{
     session: string;
     challenge: string;
   } | null>(null);
+  const [storyId, setStoryId] = useState<string | null>(null);
   const [challenge, setChallenge] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [incomingMarker, setIncomingMarker] = useState("");
+  const playableAreas =
+    state?.areas.filter(
+      (a) =>
+        a.kind !== "hidden" && !(a.kind === "qr" && a.qrMode !== "prompted"),
+    ) || [];
+  const stories = (
+    state?.storyOrder ||
+    state?.areas.filter((a) => a.solved).map((a) => a.id) ||
+    []
+  )
+    .map((id) => state?.areas.find((a) => a.id === id))
+    .filter((a) => a?.solved && a.description);
+  const storyIndex = Math.max(
+    0,
+    storyId ? stories.findIndex((a) => a?.id === storyId) : stories.length - 1,
+  );
+  const story = stories[storyIndex];
+  const latestStoryId = stories.at(-1)?.id;
+  useEffect(() => setStoryId(null), [latestStoryId, state?.player?.session_id]);
   const activeArea =
-    state?.areas.find((a) => a.available && a.id === challenge) ||
-    state?.areas.find((a) => a.available);
+    playableAreas.find((a) => a.available && a.id === challenge) ||
+    playableAreas.find((a) => a.available);
   useEffect(() => {
     if (
       voiceAnswer &&
@@ -103,9 +124,18 @@ export function App() {
       void refresh();
     };
     window.addEventListener("focus", resume);
-    setJoinSession(new URLSearchParams(location.search).get("session") || "");
-    setCode(new URLSearchParams(location.search).get("code") || "");
-    setIncomingMarker(new URLSearchParams(location.search).get("code") || "");
+    const linked = new URLSearchParams(location.search).get("session") || "";
+    setJoinSession(linked);
+    setLinkedSession(linked);
+
+    const url = new URL(location.href);
+    setIncomingMarker(url.searchParams.get("code") || "");
+    url.searchParams.delete("code");
+    history.replaceState(
+      history.state,
+      "",
+      url.pathname + url.search + url.hash,
+    );
     return () => {
       clearInterval(timer);
       window.removeEventListener("focus", resume);
@@ -163,21 +193,19 @@ export function App() {
     if (
       !state?.player ||
       state.player.session.status !== "running" ||
-      state.automationPending ||
-      !code ||
+      (state.automationPending && !incomingMarker) ||
+      !(incomingMarker || code) ||
       busy
     )
       return;
-    const area = incomingMarker
-      ? state.areas.find(
-          (a) => a.available && ["qr", "hidden"].includes(a.kind),
-        )
-      : activeArea;
-    if (!area || !["qr", "hidden"].includes(area.kind)) return;
+    if (
+      !incomingMarker &&
+      (!activeArea || !["qr", "hidden"].includes(activeArea.kind))
+    )
+      return;
     const token = incomingMarker || code;
     setIncomingMarker("");
     setCode("");
-    history.replaceState(null, "", "/");
     void act({ action: "unlock", code: token });
   }, [
     code,
@@ -202,7 +230,12 @@ export function App() {
     <div
       className={adminPage ? "admin-shell" : "player-shell"}
       data-design-scheme={
-        adminPage ? undefined : state?.designScheme || "standard"
+        adminPage
+          ? undefined
+          : state?.player
+            ? state.designScheme || "standard"
+            : state?.sessions.find((s) => s.id === joinSession)?.designScheme ||
+              "standard"
       }
     >
       {!adminPage && state?.player && (
@@ -659,7 +692,10 @@ export function App() {
           )
         ) : !state.player ? (
           <section className="join panel">
-            <h1>Join a session</h1>
+            <h1>
+              {state.sessions.find((s) => s.id === joinSession)?.gameName ||
+                "Join a session"}
+            </h1>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -676,16 +712,22 @@ export function App() {
                   required
                   maxLength={40}
                   autoComplete="given-name"
+                  autoFocus
                 />
               </label>
-              {joinSession ? (
+              {linkedSession ? (
                 <>
                   <input type="hidden" name="id" value={joinSession} />
                 </>
               ) : (
                 <label>
                   Session
-                  <select name="id" required defaultValue="">
+                  <select
+                    name="id"
+                    required
+                    defaultValue=""
+                    onChange={(e) => setJoinSession(e.target.value)}
+                  >
                     <option value="" disabled>
                       Select a session
                     </option>
@@ -703,10 +745,7 @@ export function App() {
                 !state.sessions.some(
                   (s) => s.id === joinSession && s.acceptingPlayers,
                 ) && (
-                  <p role="status">
-                    The linked session is not accepting players. Ask your game
-                    master to open joining.
-                  </p>
+                  <p role="status">This connection is currently unavailable.</p>
                 )}
               {!state.sessions.some((s) => s.acceptingPlayers) && (
                 <p>No sessions are open.</p>
@@ -737,16 +776,45 @@ export function App() {
                     : "Session ended"}
               </p>
             )}
-            {state.areas
-              .filter((a) => a.solved)
-              .map((a) => (
-                <section key={a.id} data-view={a.playerView || "narrative"}>
-                  <GameMarkdown>{a.description}</GameMarkdown>
-                  {state.voice?.enabled && state.player && (
-                    <Listen source="story" contentId={a.id} />
-                  )}
-                </section>
-              ))}
+            {story && (
+              <section
+                data-view={story.playerView || "narrative"}
+                aria-label="Transmission"
+              >
+                <GameMarkdown>{story.description}</GameMarkdown>
+                {state.voice?.enabled && (
+                  <Listen source="story" contentId={story.id} />
+                )}
+                {stories.length > 1 && (
+                  <nav
+                    className="story-navigation"
+                    aria-label="Transmission history"
+                  >
+                    <Button
+                      variant="ghost"
+                      aria-label="Previous transmission"
+                      title="Previous transmission"
+                      disabled={storyIndex === 0}
+                      onClick={() => setStoryId(stories[storyIndex - 1]!.id)}
+                    >
+                      ←
+                    </Button>
+                    <span aria-live="polite">
+                      {storyIndex + 1} / {stories.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      aria-label="Next transmission"
+                      title="Next transmission"
+                      disabled={storyIndex === stories.length - 1}
+                      onClick={() => setStoryId(stories[storyIndex + 1]!.id)}
+                    >
+                      →
+                    </Button>
+                  </nav>
+                )}
+              </section>
+            )}
             {!!state.clues?.length && (
               <section aria-label="Clues">
                 <h2>Clues</h2>
@@ -761,12 +829,12 @@ export function App() {
                 ))}
               </section>
             )}
-            {state.areas.filter((a) => a.available).length > 1 && (
+            {playableAreas.filter((a) => a.available).length > 1 && (
               <nav
                 className="challenge-switcher"
                 aria-label="Active challenges"
               >
-                {state.areas
+                {playableAreas
                   .filter((a) => a.available)
                   .map((a) => (
                     <Button
@@ -781,19 +849,12 @@ export function App() {
                           }));
                         setChallenge(a.id);
                         setCode(answers[a.id] || "");
-                        history.replaceState(null, "", "/");
                       }}
                     >
                       <GameMarkdown inline>{a.name}</GameMarkdown>
                     </Button>
                   ))}
               </nav>
-            )}
-            {state.automationPending && (
-              <p role="status">
-                Waiting for room actions. Ask your game master to check
-                Automation if nothing happens.
-              </p>
             )}
             {state.player.session.progress === state.areas.length &&
               !state.automationPending && <p role="status">Game complete!</p>}
@@ -809,7 +870,6 @@ export function App() {
                   }).then((ok) => {
                     if (ok) {
                       setCode("");
-                      history.replaceState(null, "", "/");
                     }
                   });
                 }}

@@ -1249,3 +1249,19 @@ textarea {
 .voice-controls .button + .button {
   margin-inline-start: 0.5rem;
 }
+
+.story-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.story-navigation .button {
+  cursor: pointer;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+.story-navigation .button:active {
+  transform: scale(0.97);
+}

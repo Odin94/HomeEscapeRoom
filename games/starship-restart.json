@@ -8,10 +8,10 @@
   "areas": [
     {
       "id": "boot",
-      "name": "Enable the board computer",
+      "name": "Emergency interface",
       "kind": "qr",
       "requires": [],
-      "hint": "Scan the activation code on your briefing sheet.",
+      "hint": "",
       "description": "Emergency interface online. You are in the dark engine room of a drifting spaceship. In 30 minutes, the ship will enter a meteor field. Restore power, communications and the engine before impact.",
       "unlockCode": "87073809-4f0d-4aa2-91a3-7c126bfe8346",
       "onComplete": [
@@ -43,7 +43,7 @@
         }
       ],
       "playerView": "narrative",
-      "qrMode": "prompted"
+      "qrMode": "hidden"
     },
     {
       "id": "flower",
@@ -68,7 +68,7 @@
       "kind": "qr",
       "requires": ["boot"],
       "hint": "Emergency power comes from a great stomp.",
-      "description": "Emergency protocols are now in effect. Watch the repeating status lights carefully.",
+      "description": "Emergency power restored. Emergency protocols are now in effect.",
       "unlockCode": "4b4a0185-b358-4183-a2cb-0f6df14e439f",
       "onComplete": [
         {
@@ -130,7 +130,7 @@
         {
           "type": "speech",
           "entity": "notify.living_room_echo_dot_speak",
-          "message": "Emergency power restored. Emergency protocols are now in effect. The status lights are transmitting the communications access sequence."
+          "message": "Emergency power restored. Emergency protocols are now in effect."
         }
       ],
       "playerView": "narrative",
@@ -270,7 +270,7 @@
         {
           "type": "speech",
           "entity": "notify.living_room_echo_dot_speak",
-          "message": "Emergency communications online. Distress beacon active. Maintenance unit dispatched. Scan its terminal access code to recover the last engine credential."
+          "message": "Emergency communications online. Distress beacon active. Maintenance unit dispatched."
         },
         {
           "type": "vacuum",
@@ -287,7 +287,7 @@
       "name": "Maintenance terminal access",
       "kind": "qr",
       "requires": ["comms"],
-      "hint": "Find and scan the maintenance unit access code.",
+      "hint": "",
       "description": "Maintenance terminal connected. A text enigma is now available.",
       "unlockCode": "cf02f145-2887-45a8-b9fc-05b83afeba9f",
       "onComplete": [
@@ -298,7 +298,7 @@
         }
       ],
       "playerView": "narrative",
-      "qrMode": "prompted"
+      "qrMode": "hidden"
     },
     {
       "id": "enigma",
@@ -370,5 +370,6 @@
       ],
       "playerView": "narrative"
     }
-  ]
+  ],
+  "joinChallengeId": "boot"
 }
