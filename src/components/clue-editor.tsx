@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Clue } from "../lib/clue";
-import { clueSchema } from "../lib/clue";
+import { clueSchema, MAX_CLUE_FILE_BYTES } from "../lib/clue";
 import { ClueView } from "./clue-view";
 import { Button } from "./ui";
 import { RemoveButton } from "./game-editor";
@@ -21,7 +21,7 @@ export function ClueEditor({
       <p>
         Clues are separate from challenges. Choose which ones each solved
         challenge reveals. Files are stored with the game and frozen into each
-        session. Up to 5 MB per file, 24 MB total.
+        session. Up to 100 MB per file, 1 GB total.
       </p>
       {error && <p role="alert">{error}</p>}
       {clues.map((clue, index) => (
@@ -94,8 +94,8 @@ export function ClueEditor({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  if (file.size > 5 * 1024 * 1024) {
-                    setError("Choose a file smaller than 5 MB.");
+                  if (file.size > MAX_CLUE_FILE_BYTES) {
+                    setError("Choose a file no larger than 100 MB.");
                     e.target.value = "";
                     return;
                   }

@@ -1,4 +1,4 @@
-import { clueSchema } from "./clue";
+import { clueSchema, clueFileBytes, MAX_CLUE_TOTAL_BYTES } from "./clue";
 import { prerequisites } from "./challenge-progress";
 import { designSchemeIds } from "./design-scheme";
 import { z } from "zod";
@@ -133,8 +133,14 @@ export const gameSchema = z
     const clues = game.clues || [];
     if (new Set(clues.map((c) => c.id)).size !== clues.length)
       issue("Clue IDs must be unique.");
-    if (clues.reduce((size, c) => size + c.content.length, 0) > 32_000_000)
-      issue("Clue files must total less than 24 MB.");
+    if (
+      clues.reduce(
+        (size, c) =>
+          size + (c.kind === "markdown" ? 0 : clueFileBytes(c.content)),
+        0,
+      ) > MAX_CLUE_TOTAL_BYTES
+    )
+      issue("Clue files must total no more than 1 GB.");
     const visiting = new Set<string>(),
       visited = new Set<string>();
     function visit(index: number) {

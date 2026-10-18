@@ -227,7 +227,7 @@ jump to its settings. Players can switch between active challenges; solving
 one updates the whole team. Completion requires solving every challenge.
 
 The **Clue library** holds standalone Markdown, image, audio and video clues.
-Write Markdown or choose a file (up to 5 MB per file and 24 MB total). Supported
+Write Markdown or choose a file (up to 100 MB per file and 1 GB total). Supported
 images are PNG, JPEG, GIF and WebP; audio/video playback depends on browser codec
 support. Use **Reveal clues when solved** on each challenge to choose rewards.
 A clue may be revealed by more than one challenge and appears only once. Players
