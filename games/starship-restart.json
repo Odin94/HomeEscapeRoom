@@ -1,0 +1,373 @@
+{
+  "id": "starship-restart",
+  "name": "Restart Ship",
+  "designScheme": "terminal",
+  "autoStart": true,
+  "timeLimitMinutes": 30,
+  "controls": [],
+  "areas": [
+    {
+      "id": "boot",
+      "name": "Enable the board computer",
+      "kind": "qr",
+      "requires": [],
+      "hint": "Scan the activation code on your briefing sheet.",
+      "description": "Emergency interface online. You are in the dark engine room of a drifting spaceship. In 30 minutes, the ship will enter a meteor field. Restore power, communications and the engine before impact.",
+      "unlockCode": "87073809-4f0d-4aa2-91a3-7c126bfe8346",
+      "onComplete": [
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": [
+                "light.kitchen_k_spot_couch_door",
+                "light.kitchen_k_spot_couch_wall",
+                "light.kitchen_k_spot_kitchen_door",
+                "light.kitchen_k_spot_kitchen_wall"
+              ],
+              "steps": [
+                {
+                  "mode": "color",
+                  "color": "#ff6a00",
+                  "brightness": 5,
+                  "seconds": 0.1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Emergency boot complete. Main engines offline. Collision course with a meteor field confirmed. Thirty minutes until impact. Crew, restore emergency power, communications and engine access."
+        }
+      ],
+      "playerView": "narrative",
+      "qrMode": "prompted"
+    },
+    {
+      "id": "flower",
+      "name": "Engine password: first part",
+      "kind": "text",
+      "requires": ["boot"],
+      "hint": "The first part of the engine password is a flower from the Westpark partner city. (4)",
+      "description": "First engine credential accepted. Keep this word: it is the first of three parts. The engine restart terminal is now available.",
+      "unlockCode": "hana",
+      "onComplete": [
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "First engine credential accepted. Engine restart terminal unlocked. Two password fragments remain."
+        }
+      ],
+      "playerView": "narrative"
+    },
+    {
+      "id": "stomp",
+      "name": "Emergency power",
+      "kind": "qr",
+      "requires": ["boot"],
+      "hint": "Emergency power comes from a great stomp.",
+      "description": "Emergency protocols are now in effect. Watch the repeating status lights carefully.",
+      "unlockCode": "4b4a0185-b358-4183-a2cb-0f6df14e439f",
+      "onComplete": [
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": [
+                "light.kitchen_k_spot_couch_door",
+                "light.kitchen_k_spot_couch_wall",
+                "light.kitchen_k_spot_kitchen_door",
+                "light.kitchen_k_spot_kitchen_wall"
+              ],
+              "steps": [
+                {
+                  "mode": "color",
+                  "color": "#00ff00",
+                  "brightness": 70,
+                  "seconds": 1
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.5
+                },
+                {
+                  "mode": "color",
+                  "color": "#0000ff",
+                  "brightness": 70,
+                  "seconds": 1
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.5
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffff00",
+                  "brightness": 70,
+                  "seconds": 1
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.5
+                },
+                {
+                  "mode": "color",
+                  "color": "#ff0000",
+                  "brightness": 70,
+                  "seconds": 1
+                },
+                {
+                  "mode": "off",
+                  "seconds": 3
+                }
+              ],
+              "loop": "replaced"
+            }
+          ]
+        },
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Emergency power restored. Emergency protocols are now in effect. The status lights are transmitting the communications access sequence."
+        }
+      ],
+      "playerView": "narrative",
+      "qrMode": "hidden"
+    },
+    {
+      "id": "comms",
+      "name": "Emergency communications",
+      "kind": "colors",
+      "requires": ["boot"],
+      "hint": "Enter the color combination to enable emergency communications.",
+      "description": "Emergency communications online. The second part of the engine password will help you during emergencies. Watch the signal lamp. A maintenance unit has been dispatched with access to another terminal.",
+      "unlockCode": "#00ff00|#0000ff|#ffff00|#ff0000",
+      "onComplete": [
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": [
+                "light.kitchen_k_spot_couch_door",
+                "light.kitchen_k_spot_couch_wall",
+                "light.kitchen_k_spot_kitchen_door",
+                "light.kitchen_k_spot_kitchen_wall"
+              ],
+              "steps": [
+                {
+                  "mode": "color",
+                  "color": "#ff6a00",
+                  "brightness": 5,
+                  "seconds": 0.1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": ["light.bedroom_desk_lamp"],
+              "steps": [
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.9
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.9
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.9
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.9
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.9
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 65,
+                  "seconds": 0.3
+                },
+                {
+                  "mode": "off",
+                  "seconds": 2.1
+                }
+              ],
+              "loop": "replaced"
+            }
+          ]
+        },
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Emergency communications online. Distress beacon active. Maintenance unit dispatched. Scan its terminal access code to recover the last engine credential."
+        },
+        {
+          "type": "vacuum",
+          "entity": "vacuum.roborock_s7",
+          "movement": "forward",
+          "seconds": 2
+        }
+      ],
+      "playerView": "narrative",
+      "choices": ["#ff0000", "#0000ff", "#ffff00", "#00ff00"]
+    },
+    {
+      "id": "maintenance-access",
+      "name": "Maintenance terminal access",
+      "kind": "qr",
+      "requires": ["comms"],
+      "hint": "Find and scan the maintenance unit access code.",
+      "description": "Maintenance terminal connected. A text enigma is now available.",
+      "unlockCode": "cf02f145-2887-45a8-b9fc-05b83afeba9f",
+      "onComplete": [
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Maintenance terminal connected. Solve the enigma to recover the final engine credential."
+        }
+      ],
+      "playerView": "narrative",
+      "qrMode": "prompted"
+    },
+    {
+      "id": "enigma",
+      "name": "Maintenance enigma",
+      "kind": "text",
+      "requires": ["maintenance-access"],
+      "hint": "This enigma will not remain secret for long. Or is it just tiny?",
+      "description": "The last third of the hardpassword: truly! (4)",
+      "unlockCode": "minutecryptic",
+      "onComplete": [
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Maintenance enigma resolved. Final engine credential recovered. Assemble all three password parts in the engine restart terminal."
+        }
+      ],
+      "playerView": "narrative"
+    },
+    {
+      "id": "engine",
+      "name": "Restart the engine",
+      "kind": "text",
+      "requires": ["flower"],
+      "hint": "Enter all three engine password parts in order, together in one text input, without spaces. Restore every remaining system before restart.",
+      "description": "Engine restart authorized. All systems restored. The ship changes course and clears the meteor field. Crew safe.",
+      "unlockCode": "hanasosword",
+      "onComplete": [
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": [
+                "light.kitchen_k_spot_couch_door",
+                "light.kitchen_k_spot_couch_wall",
+                "light.kitchen_k_spot_kitchen_door",
+                "light.kitchen_k_spot_kitchen_wall"
+              ],
+              "steps": [
+                {
+                  "mode": "color",
+                  "color": "#ffffff",
+                  "brightness": 80,
+                  "seconds": 0.1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "lights",
+          "groups": [
+            {
+              "entities": ["light.bedroom_desk_lamp"],
+              "steps": [
+                {
+                  "mode": "off",
+                  "seconds": 0.1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "speech",
+          "entity": "notify.living_room_echo_dot_speak",
+          "message": "Engine restart successful. Navigation restored. Evasive course engaged. Meteor field avoided. All crew accounted for. Welcome back aboard."
+        }
+      ],
+      "playerView": "narrative"
+    }
+  ]
+}
