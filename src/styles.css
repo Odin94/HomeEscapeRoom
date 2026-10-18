@@ -1250,10 +1250,14 @@ textarea {
   margin-inline-start: 0.5rem;
 }
 
+.transmission {
+  touch-action: pan-y pinch-zoom;
+}
+
 .story-navigation {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 0.5rem;
   font-size: 0.8rem;
 }
