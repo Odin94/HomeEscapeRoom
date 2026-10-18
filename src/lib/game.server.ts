@@ -66,6 +66,7 @@ export const gameSchema = z
               })
               .optional(),
             requires: z.array(z.string()).max(30).optional(),
+            completesGame: z.boolean().optional(),
             revealClues: z.array(z.string()).max(50).optional(),
             onComplete: z.array(actionSchema).max(10).optional(),
             qrMode: z.enum(["prompted", "hidden"]).optional(),

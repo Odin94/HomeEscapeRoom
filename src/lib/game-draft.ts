@@ -40,6 +40,7 @@ const draftSchema = z.object({
           })
           .optional(),
         requires: z.array(z.string()).optional(),
+        completesGame: z.boolean().optional(),
         revealClues: z.array(z.string()).optional(),
         hint: z.string(),
         description: z.string(),

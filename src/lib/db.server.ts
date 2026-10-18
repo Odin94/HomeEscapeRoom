@@ -403,6 +403,8 @@ async function complete(
     });
   if (s.status !== "running")
     throw new Error("Your game master needs to start or resume the game.");
+  if (s.progress >= game.areas.length)
+    throw new Error("Your team has already completed the game.");
   if (pending(id).length)
     throw new Error(
       "Waiting for room actions. Ask the game master to check automation.",
@@ -414,7 +416,7 @@ async function complete(
   )
     throw new Error("This challenge is not accepting that answer source.");
   nextUnlock(game.areas.indexOf(area), code, game);
-  const progress = s.progress + 1;
+  const progress = area.completesGame ? game.areas.length : s.progress + 1;
   db.transaction((tx) => {
     const updated = tx
       .update(sessions)
@@ -462,7 +464,7 @@ async function complete(
       .values({ session_id: id, message: `Unlocked ${area.name}` })
       .run();
   });
-  await lightLoops.stopSession(id, true);
+  await lightLoops.stopSession(id, progress < game.areas.length);
   await runActions(id);
 }
 export async function handleCallback(request: Request) {

@@ -319,10 +319,11 @@
     },
     {
       "id": "engine",
+      "completesGame": true,
       "name": "Restart the engine",
       "kind": "text",
       "requires": ["flower"],
-      "hint": "Enter all three engine password parts in order, together in one text input, without spaces. Restore every remaining system before restart.",
+      "hint": "Enter all three engine password parts in order, together in one text input, without spaces.",
       "description": "Engine restart authorized. All systems restored. The ship changes course and clears the meteor field. Crew safe.",
       "unlockCode": "hanasosword",
       "onComplete": [

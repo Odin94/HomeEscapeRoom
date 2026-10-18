@@ -19,6 +19,7 @@ export type Area = {
   name: string;
   kind: string;
   requires?: string[];
+  completesGame?: boolean;
   flowPosition?: { x: number; y: number };
   revealClues?: string[];
   available?: boolean;

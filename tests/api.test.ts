@@ -445,6 +445,79 @@ test("game snapshots isolate sessions and settings remain private", async () => 
   );
 });
 
+test("a winning challenge stops the timer and closes remaining challenges without marking them solved", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const areas = [
+    { id: "flower", requires: [], unlockCode: "hana" },
+    { id: "other", requires: [], unlockCode: "other" },
+    {
+      id: "engine",
+      requires: ["flower"],
+      unlockCode: "hanasosword",
+      completesGame: true,
+    },
+  ].map((area) => ({
+    ...area,
+    name: area.id,
+    kind: "text",
+    hint: "",
+    description: "",
+  }));
+  assert.equal(
+    (
+      await call(
+        {
+          action: "save-game",
+          game: {
+            id: "terminal-test",
+            name: "Terminal",
+            autoStart: true,
+            timeLimitMinutes: 30,
+            controls: [],
+            areas,
+          },
+        },
+        gm,
+      )
+    ).status,
+    200,
+  );
+  const created = await (
+    await call(
+      { action: "create", gameId: "terminal-test", name: "Terminal" },
+      gm,
+    )
+  ).json();
+  await call({ action: "status", id: created.id, status: "open" }, gm);
+  const joined = await call({ action: "join", id: created.id, name: "Crew" });
+  const player = joined.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(
+    (await call({ action: "unlock", code: "hanasosword" }, player)).status,
+    400,
+  );
+  assert.equal(
+    (await call({ action: "unlock", code: "hana" }, player)).status,
+    200,
+  );
+  assert.equal(
+    (await call({ action: "unlock", code: "hanasosword" }, player)).status,
+    200,
+  );
+  const state = await (await call(undefined, player)).json();
+  assert.equal(state.player.session.progress, 3);
+  assert.equal(state.player.session.timer.running, false);
+  assert.equal(
+    state.areas.find((a: { id: string }) => a.id === "other").solved,
+    false,
+  );
+  assert.ok(state.areas.every((a: { available: boolean }) => !a.available));
+  assert.equal(
+    (await call({ action: "unlock", code: "other" }, player)).status,
+    400,
+  );
+});
+
 test("all challenge types progress through API without exposing answers or hidden QR prompts", async () => {
   const login = await call({ action: "login", key: settings().adminKey });
   const gm = login.headers.get("set-cookie")!.split(";")[0];

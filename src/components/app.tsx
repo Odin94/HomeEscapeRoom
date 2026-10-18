@@ -731,9 +731,7 @@ export function App() {
               </p>
             )}
             {state.player.session.progress === state.areas.length &&
-              !state.automationPending && (
-                <p role="status">All challenges solved!</p>
-              )}
+              !state.automationPending && <p role="status">Game complete!</p>}
             {activeArea && (
               <form
                 className="unlock"

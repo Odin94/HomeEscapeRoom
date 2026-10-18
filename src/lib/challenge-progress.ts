@@ -10,6 +10,8 @@ export function availableChallenges<T extends Game["areas"][number]>(
   game: { areas: T[] },
   solved: string[],
 ) {
+  if (game.areas.some((area) => area.completesGame && solved.includes(area.id)))
+    return [];
   return game.areas.filter(
     (area, index) =>
       !solved.includes(area.id) &&

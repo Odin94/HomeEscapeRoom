@@ -519,6 +519,14 @@ export function GameEditor({
               ))}
             </fieldset>
             <label>
+              <input
+                type="checkbox"
+                checked={a.completesGame || false}
+                onChange={(e) => patch(i, { completesGame: e.target.checked })}
+              />
+              Solving this challenge completes the game immediately
+            </label>
+            <label>
               Challenge type
               <select
                 value={a.kind}
