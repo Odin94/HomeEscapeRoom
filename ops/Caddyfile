@@ -1,0 +1,6 @@
+# Install Caddy and replace this name with the Mac's stable LAN DNS name.
+# Trust Caddy's local CA on every game phone; see docs/local-voice-operator.md.
+threshold.home.arpa {
+    tls internal
+    reverse_proxy 127.0.0.1:3000
+}

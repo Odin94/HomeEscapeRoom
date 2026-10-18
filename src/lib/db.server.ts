@@ -648,7 +648,10 @@ export async function handle(request: Request) {
         status: 405,
         headers,
       });
-    if (request.headers.get("origin") !== new URL(request.url).origin)
+    if (
+      request.headers.get("origin") !==
+      (settings().publicUrl || new URL(request.url).origin)
+    )
       return new Response(
         JSON.stringify({
           error: "Invalid origin. Reload the app and try again.",
