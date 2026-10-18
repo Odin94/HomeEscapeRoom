@@ -1,3 +1,4 @@
+import { designSchemeIds } from "./design-scheme";
 import { z } from "zod";
 import { lightStepSchema } from "./light-transition";
 
@@ -11,6 +12,7 @@ const draftSchema = z.object({
   game: z.object({
     id: z.string(),
     name: z.string(),
+    designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
     controls: z.array(
       z.object({ id: z.string(), name: z.string(), entity: z.string() }),

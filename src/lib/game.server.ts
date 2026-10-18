@@ -1,3 +1,4 @@
+import { designSchemeIds } from "./design-scheme";
 import { z } from "zod";
 import {
   readdirSync,
@@ -30,6 +31,7 @@ export const gameSchema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
       .max(80),
     name: z.string().trim().min(1).max(80),
+    designScheme: z.enum(designSchemeIds).optional(),
     autoStart: z.boolean().optional(),
     areas: z
       .array(

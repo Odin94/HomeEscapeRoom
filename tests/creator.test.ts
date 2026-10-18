@@ -13,6 +13,7 @@ test("creation restores unfinished drafts and custom IDs, and ignores broken sto
   const game = structuredClone(loadGames()[0]);
   game.id = "custom-id";
   game.name = "Unfinished draft";
+  game.designScheme = "elven-forest";
   game.areas[0].kind = "text";
   game.areas[0].unlockCode = "";
   game.areas[0].hint = "Keep this clue";
@@ -218,4 +219,21 @@ test("creator renders robot movement dropdowns and restores unfinished vacuum dr
     if (previous) Object.defineProperty(globalThis, "localStorage", previous);
     else Reflect.deleteProperty(globalThis, "localStorage");
   }
+});
+
+import { designSchemes } from "../src/lib/design-scheme";
+test("editor offers all player themes and previews the saved scheme", () => {
+  const html = renderToStaticMarkup(
+    createElement(GameEditor, {
+      initial: { ...loadGames()[0], designScheme: "terminal" },
+      busy: false,
+      save: async () => true,
+    }),
+  );
+  for (const [id, label] of Object.entries(designSchemes)) {
+    assert.ok(html.includes(`value="${id}"`));
+    assert.ok(html.includes(label));
+  }
+  assert.ok(html.includes('data-design-scheme="terminal"'));
+  assert.ok(html.includes('value="terminal" selected=""'));
 });

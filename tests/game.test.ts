@@ -165,3 +165,18 @@ test("hidden QR clues are optional for explicit and legacy modes", () => {
     }
   }
 });
+
+import { designSchemeIds } from "../src/lib/design-scheme";
+test("games accept every design scheme and preserve compatibility with old games", () => {
+  const game = makeGame({ kind: "text", unlockCode: "answer" });
+  assert.equal(gameSchema.parse(game).designScheme, undefined);
+  for (const designScheme of designSchemeIds)
+    assert.equal(
+      gameSchema.parse({ ...game, designScheme }).designScheme,
+      designScheme,
+    );
+  assert.equal(
+    gameSchema.safeParse({ ...game, designScheme: "unknown" }).success,
+    false,
+  );
+});

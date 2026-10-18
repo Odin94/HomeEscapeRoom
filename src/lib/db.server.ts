@@ -382,6 +382,7 @@ export async function handle(request: Request) {
       const active = p ? definition(p.session_id) : games[0];
       const areas = active?.areas || [];
       return reply({
+        designScheme: p ? active?.designScheme || "standard" : "standard",
         automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,
         demo: !settings().haUrl,

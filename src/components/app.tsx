@@ -167,7 +167,12 @@ export function App() {
   const game =
     state?.games?.find((g) => g.id === selected) || state?.games?.[0];
   return (
-    <div className={adminPage ? "admin-shell" : "player-shell"}>
+    <div
+      className={adminPage ? "admin-shell" : "player-shell"}
+      data-design-scheme={
+        adminPage ? undefined : state?.designScheme || "standard"
+      }
+    >
       {!adminPage && state?.player && (
         <Button
           className="player-leave"

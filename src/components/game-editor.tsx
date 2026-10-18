@@ -1,3 +1,4 @@
+import { designSchemes, type DesignScheme } from "../lib/design-scheme";
 import type { VacuumAction } from "../lib/vacuum";
 import { GameMarkdown } from "./game-markdown";
 import { QrToken } from "./qr-token";
@@ -261,6 +262,42 @@ export function GameEditor({
           }}
         />
       </label>
+      <label>
+        Player design scheme
+        <select
+          value={game.designScheme || "standard"}
+          onChange={(event) =>
+            setGame({
+              ...game,
+              designScheme: event.target.value as DesignScheme,
+            })
+          }
+        >
+          {Object.entries(designSchemes).map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div
+        className="scheme-preview player-shell"
+        data-design-scheme={game.designScheme || "standard"}
+        aria-label="Player design preview"
+      >
+        <div className="panel">
+          <h2>The next chapter</h2>
+          <p>A door opens. Your adventure continues.</p>
+          <label>
+            Answer
+            <input placeholder="Your answer" readOnly />
+          </label>
+          <Button type="button">Unlock</Button>{" "}
+          <Button type="button" variant="outline">
+            Hint
+          </Button>
+        </div>
+      </div>
       <label>
         <input
           type="checkbox"

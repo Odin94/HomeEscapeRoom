@@ -1,3 +1,4 @@
+import type { DesignScheme } from "./design-scheme";
 import { createStore } from "zustand/vanilla";
 import type { VacuumAction } from "./vacuum";
 import type { LightTransition } from "./light-transition";
@@ -6,6 +7,7 @@ export type Game = {
   id: string;
   name: string;
   areas: Area[];
+  designScheme?: DesignScheme;
   autoStart?: boolean;
   controls: { id: string; name: string; entity: string }[];
 };
@@ -36,6 +38,7 @@ type Session = {
   acceptingPlayers?: boolean;
 };
 export type State = {
+  designScheme?: DesignScheme;
   admin: boolean;
   adminConfigured: boolean;
   shareOrigin?: string | null;

@@ -324,6 +324,7 @@ test("game snapshots isolate sessions and settings remain private", async () => 
   const gm = login.headers.get("set-cookie")!.split(";")[0];
   const game = {
     id: "test-room",
+    designScheme: "terminal",
     name: "Different room",
     areas: [
       {
@@ -348,7 +349,11 @@ test("game snapshots isolate sessions and settings remain private", async () => 
   await call(
     {
       action: "save-game",
-      game: { ...game, areas: [{ ...game.areas[0], unlockCode: "changed" }] },
+      game: {
+        ...game,
+        designScheme: "warm",
+        areas: [{ ...game.areas[0], unlockCode: "changed" }],
+      },
     },
     gm,
   );
@@ -364,6 +369,7 @@ test("game snapshots isolate sessions and settings remain private", async () => 
   assert.equal(state.areas.length, 1);
   assert.equal(state.areas[0].description, "Original ending");
   assert.equal(state.areas[0].playerView, "narrative");
+  assert.equal(state.designScheme, "terminal");
   assert.equal(state.games, undefined);
   assert.equal(state.settings, undefined);
   assert.equal(
