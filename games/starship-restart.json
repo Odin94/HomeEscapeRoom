@@ -142,7 +142,7 @@
       "kind": "colors",
       "requires": ["boot"],
       "hint": "Enter the color combination to enable emergency communications.",
-      "description": "Emergency communications online. The second part of the engine password will help you during emergencies. Watch the signal lamp. A maintenance unit has been dispatched with access to another terminal.",
+      "description": "Emergency communications online. A maintenance unit has been dispatched with access to another terminal.",
       "unlockCode": "#00ff00|#0000ff|#ffff00|#ff0000",
       "onComplete": [
         {
@@ -174,7 +174,7 @@
               "steps": [
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -184,7 +184,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -194,7 +194,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -204,7 +204,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.9
                 },
@@ -214,7 +214,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.9
                 },
@@ -224,7 +224,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.9
                 },
@@ -234,7 +234,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -244,7 +244,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -254,7 +254,7 @@
                 },
                 {
                   "mode": "color",
-                  "color": "#ffffff",
+                  "color": "#ff0000",
                   "brightness": 65,
                   "seconds": 0.3
                 },
@@ -281,6 +281,16 @@
       ],
       "playerView": "narrative",
       "choices": ["#ff0000", "#0000ff", "#ffff00", "#00ff00"]
+    },
+    {
+      "id": "distress",
+      "name": "Engine password: second part",
+      "kind": "text",
+      "requires": ["comms"],
+      "hint": "The second part of the engine password will help you during emergencies. (3)",
+      "description": "Second engine credential accepted. Keep this word: it is the second of three parts.",
+      "unlockCode": "sos",
+      "playerView": "narrative"
     },
     {
       "id": "maintenance-access",
