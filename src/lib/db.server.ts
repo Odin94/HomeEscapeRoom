@@ -424,7 +424,8 @@ async function complete(
         ? "This code has already been used."
         : "This code is not valid here.",
     );
-  if (pending(id).length)
+  // Physical discoveries remain usable while room effects run or await retry.
+  if (area.kind !== "qr" && pending(id).length)
     throw new Error("Systems are responding. Try again in a moment.");
   nextUnlock(game.areas.indexOf(area), code, game);
   const progress = area.completesGame ? game.areas.length : s.progress + 1;

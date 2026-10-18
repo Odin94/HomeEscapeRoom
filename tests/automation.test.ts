@@ -309,3 +309,112 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
     globalThis.fetch = originalFetch;
   }
 });
+
+test("QR scans complete while earlier room actions run or await retry", async () => {
+  const gm = (
+    await call({ action: "login", key: "automation-test-key" })
+  ).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const originalFetch = globalThis.fetch;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started!: () => void;
+  const running = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  try {
+    saveSettings({
+      haUrl: "http://ha.test",
+      haToken: "test-token",
+      adminKey: "automation-test-key",
+      publicUrl: "",
+    });
+    globalThis.fetch = async () => {
+      started();
+      await held;
+      return new Response("", { status: 503 });
+    };
+    const game = {
+      id: "scan-during-effects",
+      name: "Scan during effects",
+      autoStart: true,
+      controls: [],
+      areas: [
+        {
+          id: "comms",
+          name: "Communications",
+          kind: "text",
+          hint: "",
+          description: "",
+          unlockCode: "online",
+          onComplete: [{ type: "control", controlId: "lamp" }],
+        },
+        {
+          id: "maintenance",
+          name: "Maintenance access",
+          kind: "qr",
+          qrMode: "hidden",
+          hint: "",
+          description: "Connected",
+          unlockCode: "maintenance-code",
+        },
+        {
+          id: "next",
+          name: "Next access",
+          kind: "qr",
+          qrMode: "hidden",
+          hint: "",
+          description: "Connected again",
+          unlockCode: "next-code",
+        },
+      ],
+    };
+    const definition = {
+      ...game,
+      controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+    };
+    assert.equal(
+      (await call({ action: "save-game", game: definition }, gm)).status,
+      200,
+    );
+    const { id } = await (
+      await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+    ).json();
+    const player = (await call({ action: "join", id, name: "Crew" })).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    const completion = call(
+      { action: "unlock", code: "online", challengeId: "comms" },
+      player,
+    );
+    await running;
+    assert.equal(
+      (await (await call(undefined, player)).json()).automationPending,
+      true,
+    );
+    assert.equal(
+      (await call({ action: "unlock", code: "maintenance-code" }, player))
+        .status,
+      200,
+    );
+    release();
+    assert.equal((await completion).status, 200);
+    assert.equal(
+      (await (await call(undefined, player)).json()).automationPending,
+      true,
+    );
+    assert.equal(
+      (await call({ action: "unlock", code: "next-code" }, player)).status,
+      200,
+    );
+    const state = await (await call(undefined, player)).json();
+    assert.equal(state.player.session.progress, 3);
+    assert.deepEqual(state.storyOrder, ["comms", "maintenance", "next"]);
+  } finally {
+    release();
+    globalThis.fetch = originalFetch;
+  }
+});

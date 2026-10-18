@@ -173,8 +173,12 @@ export function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-  async function act(body: Record<string, unknown>, message = "") {
-    setBusy(true);
+  async function act(
+    body: Record<string, unknown>,
+    message = "",
+    blockUI = true,
+  ) {
+    if (blockUI) setBusy(true);
     try {
       await api(body);
       await refresh();
@@ -186,16 +190,14 @@ export function App() {
       setToast((e as Error).message);
       return false;
     } finally {
-      setBusy(false);
+      if (blockUI) setBusy(false);
     }
   }
   useEffect(() => {
     if (
       !state?.player ||
       state.player.session.status !== "running" ||
-      (state.automationPending && !incomingMarker) ||
-      !(incomingMarker || code) ||
-      busy
+      !(incomingMarker || code)
     )
       return;
     if (
@@ -206,7 +208,7 @@ export function App() {
     const token = incomingMarker || code;
     setIncomingMarker("");
     setCode("");
-    void act({ action: "unlock", code: token });
+    void act({ action: "unlock", code: token }, "", false);
   }, [
     code,
     busy,
@@ -909,8 +911,9 @@ export function App() {
                   code={code}
                   setCode={setCode}
                   disabled={
-                    busy ||
-                    !!state.automationPending ||
+                    ((busy || !!state.automationPending) &&
+                      activeArea.kind !== "qr" &&
+                      activeArea.kind !== "hidden") ||
                     state.player.session.status !== "running"
                   }
                 />
