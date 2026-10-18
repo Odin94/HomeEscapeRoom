@@ -573,9 +573,11 @@ export function GameEditor({
                     })
                   }
                 >
-                  <option value="prompted">Offer scanner in app</option>
+                  <option value="prompted">
+                    Visible challenge (scan physical code)
+                  </option>
                   <option value="hidden">
-                    Hidden: players discover and scan physical code
+                    Hidden unless a discovery clue is provided
                   </option>
                 </select>
               </label>
@@ -1240,77 +1242,15 @@ export function ChallengeInput({
   setCode: (value: string) => void;
   disabled: boolean;
 }) {
-  const [error, setError] = useState("");
-  const hidden =
-    area.kind === "hidden" ||
-    (area.kind === "qr" && area.qrMode !== "prompted");
+  if (area.kind === "qr" || area.kind === "hidden") return null;
   if (area.kind === "external")
     return (
       <p role="status">
         Tell Alexa your answer using the phrase provided by your game master.
       </p>
     );
-  if (hidden && !code) return null;
   return (
     <>
-      {area.kind === "qr" && !hidden ? (
-        <>
-          <label>
-            <span className="sr-only">Scan QR image</span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              disabled={disabled}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const image = await createImageBitmap(file);
-                  try {
-                    const canvas = document.createElement("canvas");
-                    const scale = Math.min(
-                      1,
-                      1800 / Math.max(image.width, image.height),
-                    );
-                    canvas.width = Math.round(image.width * scale);
-                    canvas.height = Math.round(image.height * scale);
-                    const context = canvas.getContext("2d");
-                    if (!context) throw new Error("Could not read image.");
-                    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-                    const pixels = context.getImageData(
-                      0,
-                      0,
-                      canvas.width,
-                      canvas.height,
-                    );
-                    const { default: decode } = await import("jsqr");
-                    const result = decode(
-                      pixels.data,
-                      pixels.width,
-                      pixels.height,
-                    );
-                    if (!result)
-                      throw new Error("No QR code found. Try a clearer photo.");
-                    const url = new URL(result.data);
-                    if (url.origin !== location.origin)
-                      throw new Error("Scan a marker for this game server.");
-                    const token = url.searchParams.get("code");
-                    if (!token) throw new Error("No game marker found.");
-                    setCode(token);
-                    setError("");
-                  } finally {
-                    image.close();
-                  }
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            />
-          </label>
-          {error && <p role="alert">{error}</p>}
-        </>
-      ) : null}
       {["colors", "symbols"].includes(area.kind) ? (
         <>
           <div
@@ -1384,7 +1324,7 @@ export function ChallengeInput({
             <Button disabled={disabled || !code}>Unlock</Button>
           </div>
         </>
-      ) : area.kind !== "qr" && !hidden ? (
+      ) : (
         <label>
           <span className="sr-only">
             {area.kind === "numbers" ? "Number code" : "Answer"}
@@ -1400,7 +1340,7 @@ export function ChallengeInput({
             disabled={disabled}
           />
         </label>
-      ) : null}
+      )}
       {!["colors", "symbols"].includes(area.kind) && (
         <Button disabled={disabled || !code}>Unlock</Button>
       )}

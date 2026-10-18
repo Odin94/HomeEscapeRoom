@@ -117,7 +117,7 @@ test("hidden QR has no visible scanner or input for either player or admin repre
       disabled: false,
     }),
   );
-  assert.ok(prompted.includes('type="file"'));
+  assert.equal(prompted, "");
 });
 test("portable decoder reads the actual generated marker format", () => {
   const url = "http://192.168.1.4:3000/?code=tutorial-prompted-marker";

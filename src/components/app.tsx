@@ -3,7 +3,7 @@ import { RoomPlayer } from "./voice-room-player";
 import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
 import { SwipeTransmission } from "./swipe-transmission";
-import { DiscoveryClues } from "./discovery-clues";
+import { playerChallenges } from "../lib/player-challenges";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
 import {
@@ -67,11 +67,7 @@ export function App() {
   const [challenge, setChallenge] = useState<string | null>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [incomingMarker, setIncomingMarker] = useState("");
-  const playableAreas =
-    state?.areas.filter(
-      (a) =>
-        a.kind !== "hidden" && !(a.kind === "qr" && a.qrMode !== "prompted"),
-    ) || [];
+  const playableAreas = playerChallenges(state?.areas || []);
   const stories = (
     state?.storyOrder ||
     state?.areas.filter((a) => a.solved).map((a) => a.id) ||
@@ -201,26 +197,15 @@ export function App() {
     if (
       !state?.player ||
       state.player.session.status !== "running" ||
-      !(incomingMarker || code)
+      !incomingMarker
     )
       return;
-    if (
-      !incomingMarker &&
-      (!activeArea || !["qr", "hidden"].includes(activeArea.kind))
-    )
-      return;
-    const token = incomingMarker || code;
+    const token = incomingMarker;
     setIncomingMarker("");
-    setCode("");
     void act({ action: "unlock", code: token }, "", false);
   }, [
-    code,
-    busy,
     state?.player?.session_id,
     state?.player?.session.status,
-    state?.player?.session.progress,
-    state?.automationPending,
-    activeArea?.id,
     incomingMarker,
   ]);
   function submit(e: FormEvent<HTMLFormElement>, action: string) {
@@ -845,10 +830,6 @@ export function App() {
             )}
             {state.player.session.progress === state.areas.length &&
               !state.automationPending && <p role="status">Game complete!</p>}
-            <DiscoveryClues
-              areas={state.areas}
-              voiceEnabled={state.voice?.enabled}
-            />
             <div className="challenge-accordion" aria-label="Active challenges">
               {playableAreas
                 .filter((area) => area.available)
@@ -895,8 +876,12 @@ export function App() {
                               code,
                               challengeId: activeArea.id,
                             }).then((ok) => {
-                              if (ok) {
+                              if (ok || activeArea.kind === "colors") {
                                 setCode("");
+                                setAnswers((previous) => ({
+                                  ...previous,
+                                  [activeArea.id]: "",
+                                }));
                               }
                             });
                           }}
