@@ -1095,11 +1095,52 @@ textarea {
   cursor: pointer;
 }
 
-.challenge-switcher {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+.challenge-accordion {
   margin-block: 1.5rem;
+}
+.story .challenge-item {
+  margin: 0;
+  border-bottom: 1px solid var(--border, #d5d9d5);
+}
+.story .challenge-heading {
+  margin: 0;
+  font-size: 1rem;
+}
+.challenge-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.challenge-trigger:active {
+  transform: scale(0.97);
+}
+.challenge-trigger:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 0;
+}
+.challenge-chevron {
+  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.challenge-trigger[aria-expanded="true"] .challenge-chevron {
+  transform: rotate(180deg);
+}
+.challenge-item .unlock {
+  padding: 0.25rem 0.25rem 1.25rem;
+  margin: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .challenge-chevron {
+    transition: none;
+  }
 }
 .clue-media {
   display: block;

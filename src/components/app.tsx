@@ -64,7 +64,7 @@ export function App() {
   } | null>(null);
   const storyTouch = useRef<{ x: number; y: number; id: number } | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
-  const [challenge, setChallenge] = useState("");
+  const [challenge, setChallenge] = useState<string | null>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [incomingMarker, setIncomingMarker] = useState("");
   const playableAreas =
@@ -87,8 +87,10 @@ export function App() {
   const latestStoryId = stories.at(-1)?.id;
   useEffect(() => setStoryId(null), [latestStoryId, state?.player?.session_id]);
   const activeArea =
-    playableAreas.find((a) => a.available && a.id === challenge) ||
-    playableAreas.find((a) => a.available);
+    challenge === null
+      ? undefined
+      : playableAreas.find((a) => a.available && a.id === challenge) ||
+        playableAreas.find((a) => a.available);
   useEffect(() => {
     if (
       voiceAnswer &&
@@ -871,94 +873,108 @@ export function App() {
                 ))}
               </section>
             )}
-            {playableAreas.filter((a) => a.available).length > 1 && (
-              <nav
-                className="challenge-switcher"
-                aria-label="Active challenges"
-              >
-                {playableAreas
-                  .filter((a) => a.available)
-                  .map((a) => (
-                    <Button
-                      key={a.id}
-                      variant={activeArea?.id === a.id ? "default" : "outline"}
-                      aria-pressed={activeArea?.id === a.id}
-                      onClick={() => {
-                        if (activeArea)
-                          setAnswers((previous) => ({
-                            ...previous,
-                            [activeArea.id]: code,
-                          }));
-                        setChallenge(a.id);
-                        setCode(answers[a.id] || "");
-                      }}
-                    >
-                      <GameMarkdown inline>{a.name}</GameMarkdown>
-                    </Button>
-                  ))}
-              </nav>
-            )}
             {state.player.session.progress === state.areas.length &&
               !state.automationPending && <p role="status">Game complete!</p>}
-            {activeArea && (
-              <form
-                className="unlock"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void act({
-                    action: "unlock",
-                    code,
-                    challengeId: activeArea.id,
-                  }).then((ok) => {
-                    if (ok) {
-                      setCode("");
-                    }
-                  });
-                }}
-              >
-                {activeArea.hint && (
-                  <GameMarkdown>{activeArea.hint}</GameMarkdown>
-                )}
-                {state.voice?.enabled && activeArea.hint && (
-                  <Listen
-                    key={`listen-${state.player.session_id}-${activeArea.id}`}
-                    source="hint"
-                    contentId={activeArea.id}
-                  />
-                )}
-                {state.voice?.enabled && activeArea.kind === "text" && (
-                  <Talk
-                    key={`talk-${state.player.session_id}-${activeArea.id}`}
-                    sessionId={state.player.session_id}
-                    challengeId={activeArea.id}
-                    disabled={
-                      busy ||
-                      !!state.automationPending ||
-                      state.player.session.status !== "running"
-                    }
-                    onText={(text) => {
-                      setVoiceAnswer({
-                        session: state.player!.session_id,
-                        challenge: activeArea.id,
-                      });
-                      setCode(text);
-                    }}
-                  />
-                )}
-                <ChallengeInput
-                  key={`${state.player.session_id}-${activeArea.id}`}
-                  area={activeArea}
-                  code={code}
-                  setCode={setCode}
-                  disabled={
-                    ((busy || !!state.automationPending) &&
-                      activeArea.kind !== "qr" &&
-                      activeArea.kind !== "hidden") ||
-                    state.player.session.status !== "running"
-                  }
-                />
-              </form>
-            )}
+            <div className="challenge-accordion" aria-label="Active challenges">
+              {playableAreas
+                .filter((area) => area.available)
+                .map((area) => (
+                  <section className="challenge-item" key={area.id}>
+                    <h2 className="challenge-heading">
+                      <button
+                        type="button"
+                        className="challenge-trigger"
+                        id={`challenge-trigger-${area.id}`}
+                        aria-expanded={activeArea?.id === area.id}
+                        aria-controls={`challenge-panel-${area.id}`}
+                        onClick={() => {
+                          if (activeArea)
+                            setAnswers((previous) => ({
+                              ...previous,
+                              [activeArea.id]: code,
+                            }));
+                          const closing = activeArea?.id === area.id;
+                          setVoiceAnswer(null);
+                          setChallenge(closing ? null : area.id);
+                          setCode(closing ? "" : answers[area.id] || "");
+                        }}
+                      >
+                        <GameMarkdown inline>{area.name}</GameMarkdown>
+                        <span className="challenge-chevron" aria-hidden="true">
+                          ⌄
+                        </span>
+                      </button>
+                    </h2>
+                    <div
+                      id={`challenge-panel-${area.id}`}
+                      role="region"
+                      aria-labelledby={`challenge-trigger-${area.id}`}
+                      hidden={activeArea?.id !== area.id}
+                    >
+                      {activeArea && activeArea.id === area.id && (
+                        <form
+                          className="unlock"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void act({
+                              action: "unlock",
+                              code,
+                              challengeId: activeArea.id,
+                            }).then((ok) => {
+                              if (ok) {
+                                setCode("");
+                              }
+                            });
+                          }}
+                        >
+                          {activeArea.hint && (
+                            <GameMarkdown>{activeArea.hint}</GameMarkdown>
+                          )}
+                          {state.voice?.enabled && activeArea.hint && (
+                            <Listen
+                              key={`listen-${state.player!.session_id}-${activeArea.id}`}
+                              source="hint"
+                              contentId={activeArea.id}
+                            />
+                          )}
+                          {state.voice?.enabled &&
+                            activeArea.kind === "text" && (
+                              <Talk
+                                key={`talk-${state.player!.session_id}-${activeArea.id}`}
+                                sessionId={state.player!.session_id}
+                                challengeId={activeArea.id}
+                                disabled={
+                                  busy ||
+                                  !!state.automationPending ||
+                                  state.player!.session.status !== "running"
+                                }
+                                onText={(text) => {
+                                  setVoiceAnswer({
+                                    session: state.player!.session_id,
+                                    challenge: activeArea.id,
+                                  });
+                                  setCode(text);
+                                }}
+                              />
+                            )}
+                          <ChallengeInput
+                            key={`${state.player!.session_id}-${activeArea.id}`}
+                            area={activeArea}
+                            code={code}
+                            setCode={setCode}
+                            disabled={
+                              ((busy || !!state.automationPending) &&
+                                activeArea.kind !== "qr" &&
+                                activeArea.kind !== "hidden") ||
+                              state.player!.session.status !== "running"
+                            }
+                          />
+                        </form>
+                      )}
+                    </div>
+                  </section>
+                ))}
+            </div>
           </article>
         )}
       </main>
