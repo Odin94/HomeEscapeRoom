@@ -1291,8 +1291,49 @@ textarea {
   margin-inline-start: 0.5rem;
 }
 
-.transmission {
+.transmission-viewport {
+  overflow: hidden;
   touch-action: pan-y pinch-zoom;
+}
+.transmission-track {
+  display: grid;
+}
+.transmission-current,
+.transmission-neighbor {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.transmission-track.is-settling {
+  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.transmission-neighbor {
+  pointer-events: none;
+}
+.transmission-previous {
+  transform: translateX(-100%);
+}
+.transmission-next {
+  transform: translateX(100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .transmission-track {
+    transform: none !important;
+    transition: none !important;
+  }
+  .transmission-neighbor {
+    visibility: hidden;
+  }
+  .transmission-current {
+    animation: transmission-fade 150ms ease-out;
+  }
+}
+@keyframes transmission-fade {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .story-navigation {

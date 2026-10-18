@@ -2,13 +2,13 @@ import { Talk, Listen } from "./voice-controls";
 import { RoomPlayer } from "./voice-room-player";
 import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
+import { SwipeTransmission } from "./swipe-transmission";
 import { DiscoveryClues } from "./discovery-clues";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -63,7 +63,6 @@ export function App() {
     session: string;
     challenge: string;
   } | null>(null);
-  const storyTouch = useRef<{ x: number; y: number; id: number } | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<string | null>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -788,48 +787,18 @@ export function App() {
                 data-view={story.playerView || "narrative"}
                 aria-label="Transmission"
                 className="transmission"
-                onTouchStart={(event) => {
-                  storyTouch.current = null;
-                  if (
-                    event.touches.length !== 1 ||
-                    (event.target as Element).closest(
-                      "button, a, input, select, textarea, audio, video",
-                    )
-                  )
-                    return;
-                  const touch = event.touches[0];
-                  storyTouch.current = {
-                    x: touch.clientX,
-                    y: touch.clientY,
-                    id: touch.identifier,
-                  };
-                }}
-                onTouchMove={(event) => {
-                  if (event.touches.length !== 1) storyTouch.current = null;
-                }}
-                onTouchCancel={() => {
-                  storyTouch.current = null;
-                }}
-                onTouchEnd={(event) => {
-                  const start = storyTouch.current;
-                  storyTouch.current = null;
-                  if (!start || event.touches.length) return;
-                  const touch = Array.from(event.changedTouches).find(
-                    (touch) => touch.identifier === start.id,
-                  );
-                  if (!touch) return;
-                  const dx = touch.clientX - start.x;
-                  const dy = touch.clientY - start.y;
-                  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5)
-                    return;
-                  const next = stories[storyIndex + (dx < 0 ? 1 : -1)];
-                  if (next) setStoryId(next.id);
-                }}
               >
-                <GameMarkdown>{story.description}</GameMarkdown>
-                {state.voice?.enabled && (
-                  <Listen source="story" contentId={story.id} />
-                )}
+                <SwipeTransmission
+                  key={`${state.player.session_id}-${story.id}`}
+                  story={story}
+                  previous={stories[storyIndex - 1]}
+                  next={stories[storyIndex + 1]}
+                  voiceEnabled={state.voice?.enabled}
+                  onNavigate={(direction) => {
+                    const target = stories[storyIndex + direction];
+                    if (target) setStoryId(target.id);
+                  }}
+                />
                 {stories.length > 1 && (
                   <nav
                     className="story-navigation"
