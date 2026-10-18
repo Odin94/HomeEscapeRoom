@@ -13,7 +13,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import { Button } from "./ui";
 import { GameEditor, ChallengeInput } from "./game-editor";
@@ -38,7 +38,9 @@ async function api(body?: unknown) {
   return result;
 }
 export function App() {
-  const pathname = useLocation().pathname;
+  const routeLocation = useLocation();
+  const pathname = routeLocation.pathname;
+  const navigate = useNavigate();
   const adminPage = pathname.startsWith("/secretadmin");
   const tab =
     pathname === "/secretadmin/game"
@@ -125,23 +127,31 @@ export function App() {
       void refresh();
     };
     window.addEventListener("focus", resume);
-    const linked = new URLSearchParams(location.search).get("session") || "";
-    setJoinSession(linked);
-    setLinkedSession(linked);
-
-    const url = new URL(location.href);
-    setIncomingMarker(url.searchParams.get("code") || "");
-    url.searchParams.delete("code");
-    history.replaceState(
-      history.state,
-      "",
-      url.pathname + url.search + url.hash,
-    );
     return () => {
       clearInterval(timer);
       window.removeEventListener("focus", resume);
     };
   }, [refresh]);
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.searchStr);
+    const linked = params.get("session") || "";
+    setJoinSession(linked);
+    setLinkedSession(linked);
+    if (!params.has("code")) return;
+    setIncomingMarker(params.get("code") || "");
+    params.delete("code");
+    const query = params.toString();
+    void navigate({
+      href: `${routeLocation.pathname}${query ? `?${query}` : ""}${routeLocation.hash ? `#${routeLocation.hash}` : ""}`,
+      replace: true,
+      resetScroll: false,
+    });
+  }, [
+    routeLocation.searchStr,
+    routeLocation.pathname,
+    routeLocation.hash,
+    navigate,
+  ]);
   useEffect(() => {
     setJoinQr({});
     setQr("");

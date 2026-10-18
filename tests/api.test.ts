@@ -880,3 +880,37 @@ test("joining Restart Ship activates its opening once and exposes themed session
     assert.match((await result.json()).error, new RegExp(message));
   }
 });
+
+test("Restart Ship accepts the physical stomp marker regardless of selected challenge", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const { id } = await (
+    await call(
+      {
+        action: "create",
+        name: "Stomp regression",
+        gameId: "starship-restart",
+      },
+      gm,
+    )
+  ).json();
+  const joined = await call({ action: "join", id, name: "Crew" });
+  const p = joined.headers.get("set-cookie")!.split(";")[0];
+  const scanned = await call(
+    { action: "unlock", code: "4b4a0185-b358-4183-a2cb-0f6df14e439f" },
+    p,
+  );
+  assert.equal(scanned.status, 200);
+  const state = await (await call(undefined, p)).json();
+  assert.ok(state.storyOrder.includes("stomp"));
+  assert.equal(
+    state.areas.find((a: { id: string }) => a.id === "stomp").solved,
+    true,
+  );
+  const repeated = await call(
+    { action: "unlock", code: "4b4a0185-b358-4183-a2cb-0f6df14e439f" },
+    p,
+  );
+  assert.equal(repeated.status, 400);
+  assert.match((await repeated.json()).error, /already been used/);
+});
