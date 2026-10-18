@@ -10,3 +10,6 @@ data/
 *.tsbuildinfo
 .pnpm-store/
 artifacts/
+
+__pycache__/
+*.pyc

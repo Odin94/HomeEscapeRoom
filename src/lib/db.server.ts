@@ -1,3 +1,11 @@
+import {
+  voiceHealth,
+  boundedBody,
+  limited,
+  transcribe,
+  synthesize,
+} from "./voice-runtime.server";
+import { roomCommand } from "./voice-room.server";
 import { availableChallenges, revealedClues } from "./challenge-progress";
 import { moveVacuum } from "./vacuum.server";
 import { randomUUID, timingSafeEqual } from "node:crypto";
@@ -192,6 +200,7 @@ function timerRemaining(
 function setSessionStatus(id: string, status: string) {
   const s = session(id),
     now = Date.now();
+  if (status !== "running") roomCommand(id, "", "clear");
   db.transaction((tx) => {
     const timer = tx
       .select()
@@ -499,7 +508,195 @@ export async function handleCallback(request: Request) {
     );
   }
 }
+function validWriteOrigin(request: Request) {
+  const url = new URL(request.url);
+  const origin = request.headers.get("origin");
+  return (
+    origin === url.origin ||
+    (["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) &&
+      !!settings().publicUrl &&
+      origin === settings().publicUrl)
+  );
+}
+
+function voiceAccess(request: Request, challengeId: string) {
+  const p = player(request);
+  if (!p) throw new Error("Join a game first.");
+  if (
+    session(p.session_id).status !== "running" ||
+    pending(p.session_id).length
+  )
+    throw new Error(
+      "Voice is unavailable while the game is paused or waiting for room actions.",
+    );
+  const area = availableChallenges(
+    definition(p.session_id),
+    solved(p.session_id),
+  ).find((a) => a.id === challengeId && a.kind === "text");
+  if (!area) throw new Error("This text challenge is no longer available.");
+  return p;
+}
+function visibleVoiceText(id: string, source: string, contentId: string) {
+  const game = definition(id),
+    completed = solved(id);
+  const area = game.areas.find((a) => a.id === contentId);
+  if (
+    source === "hint" &&
+    area &&
+    availableChallenges(game, completed).some((a) => a.id === contentId)
+  )
+    return area.hint;
+  if (source === "story" && area && completed.includes(contentId))
+    return area.description;
+  if (source === "clue")
+    return (
+      revealedClues(game, completed).find(
+        (c) => c.id === contentId && c.kind === "markdown",
+      )?.content || ""
+    );
+  if (source === "test")
+    return "Local speech is ready. Test your selected speaker output.";
+  throw new Error("This passage is not available.");
+}
+async function handleVoice(request: Request) {
+  try {
+    if (request.method !== "POST" || !validWriteOrigin(request))
+      return Response.json(
+        { error: "Invalid voice request origin or method." },
+        { status: 403 },
+      );
+    if (new URL(request.url).searchParams.get("voice") === "health") {
+      if (!admin(request))
+        return Response.json(
+          { error: "Game master access required." },
+          { status: 401 },
+        );
+      return Response.json(
+        await limited(cookie(request, "gm"), request.signal, voiceHealth),
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+    if (!settings().voiceEnabled)
+      throw new Error("Local voice is disabled. Typed play is available.");
+    const url = new URL(request.url),
+      mode = url.searchParams.get("voice");
+    if (mode === "transcribe") {
+      const challenge = url.searchParams.get("challenge") || "";
+      const p = voiceAccess(request, challenge);
+      if (
+        !/^(audio\/(webm|mp4|ogg|wav|x-wav))(;|$)/i.test(
+          request.headers.get("content-type") || "",
+        )
+      )
+        throw new Error("Unsupported recording format.");
+      const text = await limited(
+        cookie(request, "player"),
+        request.signal,
+        async (signal) =>
+          transcribe(
+            await boundedBody(request),
+            settings().voiceLanguage,
+            signal,
+          ),
+      );
+      const current = voiceAccess(request, challenge);
+      if (current.session_id !== p.session_id)
+        throw new Error("Game changed. Record again.");
+      return Response.json(
+        { text, challengeId: challenge, sessionId: p.session_id },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+    const body = JSON.parse((await boundedBody(request, 4096)).toString());
+    const gm = admin(request),
+      p = player(request);
+    const id = gm && body.sessionId ? String(body.sessionId) : p?.session_id;
+    if (!id || (!gm && !p))
+      return Response.json({ error: "Game access required." }, { status: 401 });
+    const s = session(id);
+    if (s.status !== "running") {
+      roomCommand(id, "", "clear");
+      throw new Error("Start or resume this game before playback.");
+    }
+    if (mode === "room") {
+      if (!gm)
+        return Response.json(
+          { error: "Game master access required." },
+          { status: 401 },
+        );
+      if (settings().voiceOutput !== "room")
+        throw new Error("Select room output in Settings.");
+      const device = String(body.device || "");
+      if (!/^[a-f0-9-]{36}$/.test(device))
+        throw new Error("Enable this room player first.");
+      const command = String(body.command);
+      if (!["claim", "next", "ack", "stop", "mute"].includes(command))
+        throw new Error("Unknown room command.");
+      const result = roomCommand(
+        id,
+        device,
+        command,
+        String(body.eventId || ""),
+      );
+      if ("text" in result && result.text) {
+        const audio = await limited(`room:${id}`, request.signal, (signal) =>
+          synthesize(result.text!, signal),
+        );
+        if (session(id).status !== "running" || !admin(request))
+          throw new Error("Room playback stopped.");
+        roomCommand(id, device, "valid", result.id);
+        return new Response(new Uint8Array(audio), {
+          headers: {
+            "content-type": "audio/wav",
+            "cache-control": "no-store",
+            "x-voice-event": result.id!,
+          },
+        });
+      }
+      return Response.json(result);
+    }
+    if (mode !== "listen") throw new Error("Unknown voice operation.");
+    const source = String(body.source),
+      contentId = String(body.contentId || "");
+    if (source === "test" && !gm)
+      throw new Error("Game master access required.");
+    const text = visibleVoiceText(id, source, contentId);
+    if (settings().voiceOutput === "room")
+      return Response.json(roomCommand(id, "", "enqueue", text));
+    const audio = await limited(
+      gm ? cookie(request, "gm") : cookie(request, "player"),
+      request.signal,
+      (signal) => synthesize(text, signal),
+    );
+    if (
+      session(id).status !== "running" ||
+      (!admin(request) && player(request)?.session_id !== id)
+    )
+      throw new Error("Game access changed.");
+    visibleVoiceText(id, source, contentId);
+    return new Response(new Uint8Array(audio), {
+      headers: {
+        "content-type": "audio/wav",
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          (error as Error).name === "AbortError"
+            ? "Speech cancelled or timed out. Typed play is available."
+            : (error as Error).message,
+      },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
+  }
+}
+
 export async function handle(request: Request) {
+  if (new URL(request.url).searchParams.has("voice"))
+    return handleVoice(request);
   try {
     const isAdmin = admin(request),
       p = player(request);
@@ -529,6 +726,10 @@ export async function handle(request: Request) {
         ? availableChallenges(active, completed).map((a) => a.id)
         : [];
       return reply({
+        voice: {
+          enabled: settings().voiceEnabled,
+          output: settings().voiceOutput,
+        },
         designScheme: p ? active?.designScheme || "standard" : "standard",
         automationPending: p ? pending(p.session_id).length > 0 : false,
         admin: isAdmin,
@@ -625,6 +826,9 @@ export async function handle(request: Request) {
               games,
               shareOrigin: settings().publicUrl || lanOrigin(request.url),
               settings: {
+                voiceEnabled: settings().voiceEnabled,
+                voiceLanguage: settings().voiceLanguage,
+                voiceOutput: settings().voiceOutput,
                 publicUrl: settings().publicUrl,
                 haUrl: settings().haUrl,
                 tokenConfigured: !!settings().haToken,
@@ -648,10 +852,7 @@ export async function handle(request: Request) {
         status: 405,
         headers,
       });
-    if (
-      request.headers.get("origin") !==
-      (settings().publicUrl || new URL(request.url).origin)
-    )
+    if (!validWriteOrigin(request))
       return new Response(
         JSON.stringify({
           error: "Invalid origin. Reload the app and try again.",

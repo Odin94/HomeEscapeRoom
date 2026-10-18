@@ -1,0 +1,27 @@
+[
+  {
+    "name": "en_US-ljspeech-high.onnx.json",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/en_US-ljspeech-high.onnx.json",
+    "sha256": "7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14"
+  },
+  {
+    "name": "MODEL_CARD",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/MODEL_CARD",
+    "sha256": "289f7421072d689a3d91f6c632f486af46f9b8b04417536104a4ea667b8a394b"
+  },
+  {
+    "name": "en_US-ljspeech-high.onnx",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/en_US-ljspeech-high.onnx",
+    "sha256": "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a"
+  },
+  {
+    "name": "silero-v6.0.onnx",
+    "url": "https://raw.githubusercontent.com/snakers4/silero-vad/v6.0/src/silero_vad/data/silero_vad.onnx",
+    "sha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004"
+  },
+  {
+    "name": "ggml-base.bin",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin",
+    "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+  }
+]
