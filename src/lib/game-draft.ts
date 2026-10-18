@@ -32,6 +32,12 @@ const draftSchema = z.object({
         id: z.string(),
         name: z.string(),
         kind: z.string(),
+        flowPosition: z
+          .object({
+            x: z.number().finite().min(24).max(10000),
+            y: z.number().finite().min(24).max(10000),
+          })
+          .optional(),
         requires: z.array(z.string()).optional(),
         revealClues: z.array(z.string()).optional(),
         hint: z.string(),

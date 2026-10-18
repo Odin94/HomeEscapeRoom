@@ -327,6 +327,7 @@ export function GameEditor({
       </p>
       <ChallengeGraph
         game={game}
+        change={(next) => setGame({ ...game, areas: next.areas })}
         select={(index) => {
           const section = document.getElementById(
             `challenge-editor-${index}`,

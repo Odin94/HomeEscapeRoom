@@ -168,3 +168,64 @@ test("independent branches unlock different successors and graph shows their edg
     true,
   );
 });
+
+import {
+  connectChallenges,
+  removeConnection,
+} from "../src/lib/challenge-graph";
+test("flow edits preserve implicit links, remove arrows permanently and reject cycles atomically", () => {
+  const game = gameSchema.parse({
+    ...base,
+    areas: base.areas.map((a) => ({ ...a, requires: undefined })),
+  });
+  const removed = removeConnection(game, 0, 1);
+  assert.deepEqual(
+    removed.areas.map((a) => a.requires),
+    [[], [], ["b"]],
+  );
+  assert.deepEqual(
+    availableChallenges(removed, []).map((a) => a.id),
+    ["a", "b"],
+  );
+  assert.equal(game.areas[1].requires, undefined);
+  const added = connectChallenges(removed, 0, 2);
+  assert.deepEqual(added.areas[2].requires, ["b", "a"]);
+  assert.throws(() => connectChallenges(added, 2, 0), /cycle/);
+  assert.throws(() => connectChallenges(added, 1, 1), /different/);
+  const rewired = connectChallenges(game, 0, 2, 1);
+  assert.deepEqual(
+    rewired.areas.map((a) => a.requires),
+    [[], [], ["b", "a"]],
+  );
+  assert.deepEqual(
+    game.areas.map((a) => a.requires),
+    [undefined, undefined, undefined],
+  );
+  assert.deepEqual(connectChallenges(added, 0, 2).areas[2].requires, [
+    "b",
+    "a",
+  ]);
+  assert.throws(() => connectChallenges(game, 1, 0, 2), /cycle/);
+  assert.deepEqual(
+    game.areas.map((a) => a.requires),
+    [undefined, undefined, undefined],
+  );
+});
+test("graph positions persist through validated snapshots without altering unlock order", () => {
+  const game = gameSchema.parse(base);
+  game.areas[1].flowPosition = { x: 650, y: 300 };
+  const saved = gameSchema.parse(JSON.parse(JSON.stringify(game)));
+  assert.equal(challengeGraph(saved).nodes[1].x, 650);
+  assert.equal(challengeGraph(saved).nodes[1].y, 300);
+  assert.deepEqual(
+    availableChallenges(saved, []).map((a) => a.id),
+    ["a", "b"],
+  );
+  assert.equal(
+    gameSchema.safeParse({
+      ...base,
+      areas: [{ ...base.areas[0], flowPosition: { x: -1, y: 24 } }],
+    }).success,
+    false,
+  );
+});

@@ -53,6 +53,12 @@ export const gameSchema = z
               "symbols",
               "external",
             ]),
+            flowPosition: z
+              .object({
+                x: z.number().finite().min(24).max(10000),
+                y: z.number().finite().min(24).max(10000),
+              })
+              .optional(),
             requires: z.array(z.string()).max(30).optional(),
             revealClues: z.array(z.string()).max(50).optional(),
             onComplete: z.array(actionSchema).max(10).optional(),

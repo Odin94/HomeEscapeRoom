@@ -240,3 +240,14 @@ keeps sequential play; `[]` starts immediately. Media files are embedded as data
 URLs in the game definition and its session snapshot; player media is served
 through an authenticated endpoint. Existing sessions keep their definitions,
 clues and completed challenges across game edits and server restarts.
+
+The flow graph is editable. Drag a box by its move handle to arrange scenes;
+positions are saved in the game and draft. Drag an output dot to another box to
+add an arrow, drag an arrow tip to reconnect it, or select an arrow and choose
+**Remove selected arrow**. Connections can also be added by clicking an output
+dot then an input dot; the **Connections** list provides keyboard-accessible
+removal. Focus a move handle and use the arrow keys to move its box. Escape
+cancels a pending connection. **Auto arrange** restores the automatic layout.
+Layout changes preserve unlock rules; arrow changes update prerequisites, reject
+cycles and take effect in new sessions after **Save game**. Existing sessions
+retain their snapshots.

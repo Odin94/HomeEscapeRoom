@@ -18,6 +18,7 @@ export type Area = {
   name: string;
   kind: string;
   requires?: string[];
+  flowPosition?: { x: number; y: number };
   revealClues?: string[];
   available?: boolean;
   solved?: boolean;

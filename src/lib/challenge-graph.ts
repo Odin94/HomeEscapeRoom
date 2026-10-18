@@ -40,8 +40,8 @@ export function challengeGraph(game: Pick<Game, "areas">) {
       id: area.id,
       index,
       depth,
-      x: 24 + depth * 250,
-      y: 24 + row * 120,
+      x: area.flowPosition?.x ?? 24 + depth * 250,
+      y: area.flowPosition?.y ?? 24 + row * 120,
       invalid: unresolved.has(index),
     };
   });
@@ -52,4 +52,48 @@ export function challengeGraph(game: Pick<Game, "areas">) {
     height: Math.max(130, ...nodes.map((n) => n.y + 110)),
     invalid: unresolved.size > 0,
   };
+}
+
+// Materialize implicit sequential links before editing so untouched links stay intact.
+export function explicitFlow<T extends Pick<Game, "areas">>(game: T): T {
+  return {
+    ...game,
+    areas: game.areas.map((area, index) => ({
+      ...area,
+      requires: [...prerequisites(game, index)],
+    })),
+  };
+}
+export function connectChallenges<T extends Pick<Game, "areas">>(
+  game: T,
+  from: number,
+  to: number,
+  previousTo?: number,
+): T {
+  if (!game.areas[from] || !game.areas[to] || from === to)
+    throw new Error("Connect two different challenges.");
+  const next = explicitFlow(game);
+  if (previousTo !== undefined && previousTo !== to)
+    next.areas[previousTo].requires = next.areas[previousTo].requires!.filter(
+      (id) => id !== game.areas[from].id,
+    );
+  next.areas[to].requires = [
+    ...new Set([...next.areas[to].requires!, game.areas[from].id]),
+  ];
+  if (challengeGraph(next).invalid)
+    throw new Error(
+      "That connection would create a cycle. Choose a later challenge.",
+    );
+  return next;
+}
+export function removeConnection<T extends Pick<Game, "areas">>(
+  game: T,
+  from: number,
+  to: number,
+): T {
+  const next = explicitFlow(game);
+  next.areas[to].requires = next.areas[to].requires!.filter(
+    (id) => id !== game.areas[from].id,
+  );
+  return next;
 }
