@@ -1351,3 +1351,64 @@ textarea {
 .story-navigation .button:active {
   transform: scale(0.97);
 }
+
+.game-qr-print-sheet {
+  display: none;
+}
+@media print {
+  body:has(> .game-qr-print-sheet) > :not(.game-qr-print-sheet) {
+    display: none !important;
+  }
+  body:has(> .game-qr-print-sheet) {
+    margin: 0;
+    padding: 0;
+  }
+  .game-qr-print-sheet {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 210mm;
+    height: 296mm;
+    padding: 8mm;
+    color: black;
+    background: white;
+    font-family: Arial, sans-serif;
+  }
+  .game-qr-print-sheet h1 {
+    font-size: 12pt;
+    margin: 0 0 3mm;
+    overflow-wrap: anywhere;
+  }
+  .game-qr-print-grid {
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
+  }
+  .game-qr-print-grid section {
+    border: 0.2mm dashed #999;
+    padding: 1mm;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    text-align: center;
+    break-inside: avoid;
+    overflow-wrap: anywhere;
+  }
+  .game-qr-print-grid img {
+    width: min(100%, 42mm);
+    min-height: 0;
+    object-fit: contain;
+    aspect-ratio: 1;
+  }
+  .game-qr-print-grid strong {
+    font-size: 8pt;
+    line-height: 1.1;
+  }
+  .game-qr-print-grid small {
+    font-size: 6pt;
+    line-height: 1.1;
+  }
+}

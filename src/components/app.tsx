@@ -19,6 +19,7 @@ import { Button } from "./ui";
 import { GameEditor, ChallengeInput } from "./game-editor";
 import { readGameDraft } from "../lib/game-draft";
 import { MarkerPrint } from "./marker-print";
+import { GameQrPrint } from "./game-qr-print";
 import { useStore } from "zustand";
 import { createGameStore, type Game, type State } from "../lib/game-store";
 async function api(body?: unknown) {
@@ -515,6 +516,9 @@ export function App() {
                       control. Sessions keep a snapshot. Available player view:
                       narrative.
                     </p>
+                    {game && (
+                      <GameQrPrint game={game} origin={state.shareOrigin} />
+                    )}
                     {editor && (
                       <GameEditor
                         key={editor}
