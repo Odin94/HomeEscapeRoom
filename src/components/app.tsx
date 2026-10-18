@@ -2,6 +2,7 @@ import { Talk, Listen } from "./voice-controls";
 import { RoomPlayer } from "./voice-room-player";
 import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
+import { DiscoveryClues } from "./discovery-clues";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
 import {
@@ -875,6 +876,10 @@ export function App() {
             )}
             {state.player.session.progress === state.areas.length &&
               !state.automationPending && <p role="status">Game complete!</p>}
+            <DiscoveryClues
+              areas={state.areas}
+              voiceEnabled={state.voice?.enabled}
+            />
             <div className="challenge-accordion" aria-label="Active challenges">
               {playableAreas
                 .filter((area) => area.available)
