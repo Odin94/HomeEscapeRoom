@@ -13,7 +13,7 @@ export function GameQrPrint({
   origin?: string | null;
 }) {
   const [sheet, setSheet] = useState<
-    { label: string; detail: string; image: string }[] | null
+    { label: string; detail: string; hint: string; image: string }[] | null
   >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +33,7 @@ export function GameQrPrint({
       const codes = [
         {
           label: "Start / join game",
+          hint: "",
           detail: "Choose this game on the join page",
           url: `${origin}/`,
         },
@@ -41,6 +42,7 @@ export function GameQrPrint({
             ? [
                 {
                   label: area.name,
+                  hint: area.hint,
                   detail: `Answer · Challenge ${index + 1} · ${area.id}`,
                   url: `${origin}/?code=${encodeURIComponent(area.unlockCode)}`,
                 },
@@ -79,8 +81,9 @@ export function GameQrPrint({
       </Button>
       <p>
         Eight codes per A4 page, including a start / join code and all QR
-        answers, labeled with cutting guides. Choose Save as PDF in the print
-        dialog. Save game changes before printing.
+        answers, labeled with cutting guides and challenge hints in fine print.
+        Choose Save as PDF in the print dialog. Save game changes before
+        printing.
       </p>
       {!origin && (
         <p>
@@ -126,6 +129,11 @@ export function GameQrPrint({
                         <GameMarkdown inline>{code.label}</GameMarkdown>
                       </strong>
                       <small>{code.detail}</small>
+                      {code.hint.trim() && (
+                        <div className="game-qr-print-hint">
+                          <GameMarkdown inline>{code.hint}</GameMarkdown>
+                        </div>
+                      )}
                     </section>
                   ))}
                 </div>
