@@ -87,6 +87,7 @@ const draftSchema = z.object({
         hint: z.string(),
         description: z.string(),
         unlockCode: z.string().optional(),
+        alternativeAnswers: z.array(z.string()).optional(),
         caseSensitive: z.boolean().optional(),
         playerView: z.string().optional(),
         qrMode: z.enum(["hidden", "prompted"]).optional(),

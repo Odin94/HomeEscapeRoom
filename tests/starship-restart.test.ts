@@ -12,6 +12,12 @@ const game = gameSchema.parse(
   JSON.parse(readFileSync("games/starship-restart.json", "utf8")),
 );
 
+test("maintenance enigma accepts both spellings", () => {
+  const index = game.areas.findIndex((area) => area.id === "enigma");
+  for (const answer of ["minutecryptic", "minute cryptic"])
+    assert.equal(nextUnlock(index, answer, game), index + 1);
+});
+
 test("the SOS fragment is an independent text challenge unlocked by communications", () => {
   const index = game.areas.findIndex((area) => area.id === "distress");
   const challenge = game.areas[index];

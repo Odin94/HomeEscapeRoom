@@ -540,6 +540,7 @@ export function GameEditor({
                       : undefined,
                     qrMode: e.target.value === "qr" ? "prompted" : undefined,
                     unlockCode: "",
+                    alternativeAnswers: undefined,
                     hint: "",
                   })
                 }
@@ -768,6 +769,21 @@ export function GameEditor({
                   pattern={a.kind === "numbers" ? "[0-9]+" : undefined}
                   value={a.unlockCode || ""}
                   onChange={(e) => patch(i, { unlockCode: e.target.value })}
+                />
+              </label>
+            )}
+            {a.kind === "text" && (
+              <label>
+                Alternative accepted answers (optional, one per line)
+                <textarea
+                  value={a.alternativeAnswers?.join("\n") || ""}
+                  onChange={(e) =>
+                    patch(i, {
+                      alternativeAnswers: e.target.value
+                        ? e.target.value.split("\n")
+                        : undefined,
+                    })
+                  }
                 />
               </label>
             )}

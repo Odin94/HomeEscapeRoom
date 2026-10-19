@@ -32,6 +32,44 @@ const makeGame = (area: Record<string, unknown>) => ({
     },
   ],
 });
+test("text alternatives accept complete answers using the challenge case setting", () => {
+  const game = gameSchema.parse(
+    makeGame({
+      kind: "text",
+      unlockCode: "minutecryptic",
+      alternativeAnswers: [" minute cryptic "],
+    }),
+  );
+  for (const answer of ["minutecryptic", "minute cryptic", " MINUTE CRYPTIC "])
+    assert.equal(nextUnlock(0, answer, game), 1);
+  for (const answer of ["minute", "cryptic", "minute  cryptic", "wrong"])
+    assert.throws(() => nextUnlock(0, answer, game));
+  game.areas[0].caseSensitive = true;
+  assert.equal(nextUnlock(0, "minute cryptic", game), 1);
+  assert.throws(() => nextUnlock(0, "MINUTE CRYPTIC", game));
+  for (const alternativeAnswers of [
+    [" "],
+    ["a".repeat(257)],
+    Array(21).fill("answer"),
+  ])
+    assert.equal(
+      gameSchema.safeParse(
+        makeGame({ kind: "text", unlockCode: "answer", alternativeAnswers }),
+      ).success,
+      false,
+    );
+  assert.equal(
+    gameSchema.safeParse(
+      makeGame({
+        kind: "qr",
+        unlockCode: "marker",
+        alternativeAnswers: ["other"],
+      }),
+    ).success,
+    false,
+  );
+});
+
 test("fixed challenge types validate and match according to their rules", () => {
   for (const [kind, unlockCode, choices] of [
     ["text", "Raven", undefined],

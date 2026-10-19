@@ -88,12 +88,20 @@ export const gameSchema = z
             hint: z.string().max(1000),
             description: z.string().max(10000),
             unlockCode: z.string().trim().min(1).max(256),
+            alternativeAnswers: z
+              .array(z.string().trim().min(1).max(256))
+              .max(20)
+              .optional(),
             caseSensitive: z.boolean().optional(),
             playerView: z.enum(["narrative"]).default("narrative"),
           })
           .superRefine((area, ctx) => {
             const issue = (message: string) =>
               ctx.addIssue({ code: "custom", message });
+            if (area.kind !== "text" && area.alternativeAnswers !== undefined)
+              issue(
+                "Alternative answers are only allowed for text challenges.",
+              );
             if (area.kind === "numbers" && !/^[0-9]+$/.test(area.unlockCode))
               issue(
                 "Numbers answers must contain digits only (leading zeroes are preserved).",
@@ -249,10 +257,16 @@ export function nextUnlock(
   const text = area.kind === "text" || area.kind === "external";
   const ignoreCase = text && !area.caseSensitive;
   const answer = code.trim();
-  const expected = area.unlockCode.trim();
+  const expectedAnswers = [
+    area.unlockCode,
+    ...(area.kind === "text" ? area.alternativeAnswers || [] : []),
+  ];
   if (
-    (ignoreCase ? answer.toLowerCase() : answer) !==
-    (ignoreCase ? expected.toLowerCase() : expected)
+    !expectedAnswers.some(
+      (expected) =>
+        (ignoreCase ? answer.toLowerCase() : answer) ===
+        (ignoreCase ? expected.trim().toLowerCase() : expected.trim()),
+    )
   )
     throw new Error("That answer does not unlock this area.");
   return progress + 1;

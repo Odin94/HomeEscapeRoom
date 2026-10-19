@@ -279,6 +279,7 @@
       "hint": "This enigma will not remain secret for long. Or is it just tiny?",
       "description": "The last third of the hardpassword: truly! (4)",
       "unlockCode": "minutecryptic",
+      "alternativeAnswers": ["minute cryptic"],
       "onComplete": [
         {
           "type": "speech",

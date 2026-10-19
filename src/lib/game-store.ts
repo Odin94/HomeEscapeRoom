@@ -40,6 +40,7 @@ export type Area = {
   hint: string;
   description: string;
   unlockCode?: string;
+  alternativeAnswers?: string[];
   caseSensitive?: boolean;
   playerView?: string;
 };

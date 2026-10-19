@@ -16,6 +16,7 @@ test("creation restores unfinished drafts and custom IDs, and ignores broken sto
   game.designScheme = "elven-forest";
   game.areas[0].kind = "text";
   game.areas[0].unlockCode = "";
+  game.areas[0].alternativeAnswers = ["second answer", "third answer"];
   game.areas[0].hint = "Keep this clue";
   let raw = JSON.stringify({ game, autoId: false });
   try {
@@ -40,6 +41,8 @@ test("creation restores unfinished drafts and custom IDs, and ignores broken sto
     assert.ok(html.includes('value="custom-id"'));
     assert.ok(html.includes('value="Unfinished draft"'));
     assert.ok(html.includes("Keep this clue"));
+    assert.ok(html.includes("Alternative accepted answers"));
+    assert.ok(html.includes("second answer\nthird answer"));
     for (const invalid of ["{", "null", '{"game":{},"autoId":true}']) {
       raw = invalid;
       assert.equal(readGameDraft(), null);
