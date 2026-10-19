@@ -86,12 +86,17 @@ test("groups start together, apply RGB and brightness to all targets, and hold e
       "turn_on",
       {
         entity_id: ["light.one", "light.two"],
+        transition: 0,
         brightness_pct: 75,
         rgb_color: [255, 128, 0],
       },
     ],
     ["scene", "turn_on", { entity_id: "scene.blue" }],
-    ["light", "turn_off", { entity_id: ["light.one", "light.two"] }],
+    [
+      "light",
+      "turn_off",
+      { entity_id: ["light.one", "light.two"], transition: 0 },
+    ],
   ]);
   assert.deepEqual(waits, [2000, 3000, 1000]);
 });

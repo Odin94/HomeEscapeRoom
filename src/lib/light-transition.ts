@@ -77,6 +77,8 @@ export async function runLightTransition(
                 step.mode === "off" ? "turn_off" : "turn_on",
                 {
                   entity_id: group.entities,
+                  // Timed steps must not inherit a lamp's default fade.
+                  transition: 0,
                   ...(step.mode === "color"
                     ? {
                         brightness_pct: step.brightness,
