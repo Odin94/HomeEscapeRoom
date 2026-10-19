@@ -72,3 +72,11 @@ export const colorAttempts = sqliteTable("color_attempts", {
   id: text("id").primaryKey(),
   retry_at: integer("retry_at").notNull(),
 });
+
+export const sessionTiming = sqliteTable("session_timing", {
+  session_id: text("session_id")
+    .primaryKey()
+    .references(() => sessions.id),
+  elapsed_ms: integer("elapsed_ms").notNull(),
+  resumed_at: integer("resumed_at"),
+});

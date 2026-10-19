@@ -1009,3 +1009,63 @@ test("wrong color answers enforce a persistent five-second cooldown scoped to th
     Date.now = originalNow;
   }
 });
+
+test("completion time counts running play, excludes pauses, and stays frozen after success", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const game = {
+    id: "completion-time",
+    name: "Completion time",
+    controls: [],
+    areas: [
+      {
+        id: "final",
+        name: "Final",
+        kind: "text",
+        requires: [],
+        hint: "Finish",
+        description: "Done",
+        unlockCode: "done",
+        completesGame: true,
+      },
+    ],
+  };
+  assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+  const { id } = await (
+    await call({ action: "create", name: "Timed finish", gameId: game.id }, gm)
+  ).json();
+  const p = (await call({ action: "join", id, name: "Player" })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const readSession = async () =>
+    (await (await call(undefined, p)).json()).player.session;
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  try {
+    now += 30 * 60000;
+    assert.equal((await readSession()).elapsedMs, null);
+    await call({ action: "status", id, status: "running" }, gm);
+    now += 2 * 60000;
+    await call({ action: "status", id, status: "paused" }, gm);
+    now += 20 * 60000;
+    assert.equal((await readSession()).elapsedMs, 2 * 60000);
+    await call({ action: "status", id, status: "running" }, gm);
+    now += 60000;
+    // Repeating running must not reset elapsed time.
+    await call({ action: "status", id, status: "running" }, gm);
+    now += 2 * 60000;
+    assert.equal(
+      (await call({ action: "unlock", challengeId: "final", code: "done" }, p))
+        .status,
+      200,
+    );
+    assert.equal((await readSession()).elapsedMs, 5 * 60000);
+    now += 60 * 60000;
+    await call({ action: "status", id, status: "paused" }, gm);
+    await call({ action: "status", id, status: "running" }, gm);
+    assert.equal((await readSession()).elapsedMs, 5 * 60000);
+  } finally {
+    Date.now = originalNow;
+  }
+});

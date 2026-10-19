@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { AlexaAnswers } from "./alexa-answers.server";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
+  sessionTiming,
   colorAttempts,
   sessionTimers,
   challengeCompletions,
@@ -182,9 +183,15 @@ function session(id: string) {
     .from(sessionTimers)
     .where(eq(sessionTimers.session_id, id))
     .get();
+  const timing = db
+    .select()
+    .from(sessionTiming)
+    .where(eq(sessionTiming.session_id, id))
+    .get();
   const now = Date.now();
   return {
     ...s,
+    elapsedMs: timing ? elapsedTime(timing, now) : null,
     timer: timer
       ? {
           remainingMs: timerRemaining(timer, now),
@@ -193,6 +200,15 @@ function session(id: string) {
         }
       : null,
   };
+}
+function elapsedTime(
+  timing: { elapsed_ms: number; resumed_at: number | null },
+  now: number,
+) {
+  return (
+    timing.elapsed_ms +
+    (timing.resumed_at === null ? 0 : Math.max(0, now - timing.resumed_at))
+  );
 }
 function timerRemaining(
   timer: { remaining_ms: number; resumed_at: number | null },
@@ -216,6 +232,21 @@ function setSessionStatus(id: string, status: string) {
       .get();
     const minutes = definition(id).timeLimitMinutes;
     const finished = s.progress >= definition(id).areas.length;
+    const timing = tx
+      .select()
+      .from(sessionTiming)
+      .where(eq(sessionTiming.session_id, id))
+      .get();
+    if (timing || (status === "running" && !finished)) {
+      const next = {
+        elapsed_ms: timing ? elapsedTime(timing, now) : 0,
+        resumed_at: status === "running" && !finished ? now : null,
+      };
+      tx.insert(sessionTiming)
+        .values({ session_id: id, ...next })
+        .onConflictDoUpdate({ target: sessionTiming.session_id, set: next })
+        .run();
+    }
     if (timer || (status === "running" && minutes && !finished)) {
       tx.insert(sessionTimers)
         .values({
@@ -685,6 +716,18 @@ async function complete(
       .values({ id: `${id}:${area.id}`, session_id: id, challenge_id: area.id })
       .run();
     const now = Date.now();
+    if (progress === game.areas.length) {
+      const timing = tx
+        .select()
+        .from(sessionTiming)
+        .where(eq(sessionTiming.session_id, id))
+        .get();
+      if (timing)
+        tx.update(sessionTiming)
+          .set({ elapsed_ms: elapsedTime(timing, now), resumed_at: null })
+          .where(eq(sessionTiming.session_id, id))
+          .run();
+    }
     let timer = tx
       .select()
       .from(sessionTimers)

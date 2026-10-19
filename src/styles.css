@@ -1445,3 +1445,14 @@ textarea {
     text-align: left;
   }
 }
+
+.game-complete {
+  text-align: center;
+}
+
+.completion-stars {
+  color: #e6b84a;
+  font-size: clamp(2rem, 7vw, 3rem);
+  letter-spacing: 0.15em;
+  line-height: 1.4;
+}

@@ -52,6 +52,7 @@ type Session = {
   acceptingPlayers?: boolean;
   designScheme?: DesignScheme;
   gameName?: string;
+  elapsedMs?: number | null;
   timer?: { remainingMs: number; measuredAt: number; running: boolean } | null;
 };
 export type State = {

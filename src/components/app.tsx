@@ -1,5 +1,6 @@
 import { Talk, Listen } from "./voice-controls";
 import { RoomPlayer } from "./voice-room-player";
+import { GameComplete } from "./game-complete";
 import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
 import { SwipeTransmission } from "./swipe-transmission";
@@ -875,7 +876,7 @@ export function App() {
               </section>
             )}
             {state.player.session.progress === state.areas.length && (
-              <p role="status">Game complete!</p>
+              <GameComplete elapsedMs={state.player.session.elapsedMs} />
             )}
             <div className="challenge-accordion" aria-label="Active challenges">
               {playableAreas

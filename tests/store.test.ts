@@ -23,7 +23,7 @@ test("retired password challenges migrate in saved snapshots without losing sess
   try {
     const db = openStore(path);
     db.$client.exec(
-      "DELETE FROM __drizzle_migrations WHERE id >= (SELECT id FROM __drizzle_migrations ORDER BY id DESC LIMIT 1 OFFSET 3)",
+      "DELETE FROM __drizzle_migrations WHERE id >= (SELECT id FROM __drizzle_migrations ORDER BY id DESC LIMIT 1 OFFSET 4)",
     );
     db.$client
       .prepare(
@@ -41,7 +41,7 @@ test("retired password challenges migrate in saved snapshots without losing sess
       )
       .run();
     db.$client.exec(
-      "DROP TABLE color_attempts; DROP TABLE session_timers; DROP TABLE challenge_completions",
+      "DROP TABLE session_timing; DROP TABLE color_attempts; DROP TABLE session_timers; DROP TABLE challenge_completions",
     );
     db.$client.close();
 
@@ -130,7 +130,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         db.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        7,
+        8,
       );
     } finally {
       db.$client.close();
@@ -142,7 +142,7 @@ INSERT INTO admins VALUES ('gm-token');`);
         reopened.$client
           .prepare("SELECT count(*) AS count FROM __drizzle_migrations")
           .get()!.count,
-        7,
+        8,
       );
     } finally {
       reopened.$client.close();
