@@ -4,6 +4,7 @@ import { GameTimer } from "./game-timer";
 import { ClueView } from "./clue-view";
 import { SwipeTransmission } from "./swipe-transmission";
 import { playerChallenges } from "../lib/player-challenges";
+import { resolveJoinSession } from "../lib/join-session";
 import { GameMarkdown } from "./game-markdown";
 import { AlexaSetup } from "./alexa-setup";
 import {
@@ -60,7 +61,15 @@ export function App() {
   const [qr, setQr] = useState("");
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
   const [linkedSession, setLinkedSession] = useState("");
-  const [joinSession, setJoinSession] = useState("");
+  const [selectedJoinSession, setJoinSession] = useState("");
+  const joinSession = resolveJoinSession(
+    state?.sessions || [],
+    linkedSession,
+    selectedJoinSession,
+  );
+  const directJoin =
+    !!linkedSession ||
+    state?.sessions.filter((session) => session.acceptingPlayers).length === 1;
   const [voiceAnswer, setVoiceAnswer] = useState<{
     session: string;
     challenge: string;
@@ -742,7 +751,7 @@ export function App() {
                   autoFocus
                 />
               </label>
-              {linkedSession ? (
+              {directJoin ? (
                 <>
                   <input type="hidden" name="id" value={joinSession} />
                 </>
@@ -752,7 +761,7 @@ export function App() {
                   <select
                     name="id"
                     required
-                    defaultValue=""
+                    value={joinSession}
                     onChange={(e) => setJoinSession(e.target.value)}
                   >
                     <option value="" disabled>
