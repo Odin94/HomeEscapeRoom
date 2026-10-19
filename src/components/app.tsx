@@ -864,8 +864,9 @@ export function App() {
                 ))}
               </section>
             )}
-            {state.player.session.progress === state.areas.length &&
-              !state.automationPending && <p role="status">Game complete!</p>}
+            {state.player.session.progress === state.areas.length && (
+              <p role="status">Game complete!</p>
+            )}
             <div className="challenge-accordion" aria-label="Active challenges">
               {playableAreas
                 .filter((area) => area.available)
@@ -901,7 +902,7 @@ export function App() {
                           className="unlock"
                           onSubmit={(e) => {
                             e.preventDefault();
-                            if (busy || state.automationPending) return;
+                            if (busy) return;
                             void act({
                               action: "unlock",
                               code,
@@ -931,7 +932,6 @@ export function App() {
                                 challengeId={activeArea.id}
                                 disabled={
                                   busy ||
-                                  !!state.automationPending ||
                                   state.player!.session.status !== "running"
                                 }
                                 onText={(text) => {
@@ -948,7 +948,6 @@ export function App() {
                             area={activeArea}
                             code={code}
                             setCode={setCode}
-                            submitDisabled={busy || !!state.automationPending}
                             disabled={
                               (busy &&
                                 activeArea.kind !== "qr" &&

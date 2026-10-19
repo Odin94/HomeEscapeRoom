@@ -24,7 +24,13 @@ import {
   sessionGames,
 } from "./schema.server";
 import { openStore } from "./store.server";
-import { loadGames, saveGame, gameSchema, nextUnlock } from "./game.server";
+import {
+  loadGames,
+  saveGame,
+  gameSchema,
+  nextUnlock,
+  type Game,
+} from "./game.server";
 import { settings, saveSettings } from "./settings.server";
 import { lanOrigin } from "./network.server";
 import { speechTargets, speak, lightTargets, ha } from "./speech.server";
@@ -40,7 +46,7 @@ db.update(actionRuns)
     error:
       "Server restarted during this action. Check device state before retrying; speech may repeat.",
   })
-  .where(sql`${actionRuns.status} IN ('running', 'looping')`)
+  .where(sql`${actionRuns.status} IN ('queued', 'running', 'looping')`)
   .run();
 export function closeStore() {
   closing = true;
@@ -119,8 +125,7 @@ const alexaAnswers = new AlexaAnswers(
       if (
         s.status === "running" &&
         area?.kind === "external" &&
-        area.id === challengeId &&
-        !pending(sessionId).length
+        area.id === challengeId
       )
         return `${sessionId}:${challengeId}`;
     } catch {
@@ -129,7 +134,7 @@ const alexaAnswers = new AlexaAnswers(
   },
   async ({ sessionId, challengeId }) => {
     const area = definition(sessionId).areas.find((a) => a.id === challengeId)!;
-    await complete(sessionId, area.unlockCode, true, challengeId);
+    await complete(sessionId, area.unlockCode, true, challengeId, false);
   },
 );
 alexaAnswers.start();
@@ -261,10 +266,10 @@ function pending(id: string) {
     .where(
       and(
         eq(actionRuns.session_id, id),
-        sql`${actionRuns.status} IN ('pending', 'running', 'failed')`,
+        sql`${actionRuns.status} IN ('queued', 'pending', 'running', 'failed')`,
       ),
     )
-    .orderBy(actionRuns.id)
+    .orderBy(sql`rowid`)
     .all();
 }
 async function affectedLights(entity: string): Promise<string[]> {
@@ -282,22 +287,191 @@ async function affectedLights(entity: string): Promise<string[]> {
     );
   return members.filter((member: string) => member.startsWith("light."));
 }
+const effectControllers = new Map<string, AbortController>();
+const effectDone = new Map<string, Promise<void>>();
+const preparingEffects = new Map<string, Promise<void>>();
+type Effect = NonNullable<Game["areas"][number]["onComplete"]>[number];
+async function effectTargets(id: string, action: Effect): Promise<string[]> {
+  if (action.type === "lights") {
+    return [
+      ...new Set(
+        (
+          await Promise.all(
+            action.groups.map(async (group) => [
+              ...group.entities,
+              ...(
+                await Promise.all(
+                  group.steps
+                    .filter((step) => step.mode === "scene")
+                    .map((step) => affectedLights(step.entity)),
+                )
+              ).flat(),
+            ]),
+          )
+        ).flat(),
+      ),
+    ];
+  }
+  if (action.type === "control") {
+    const entity = definition(id).controls.find(
+      (control) => control.id === action.controlId,
+    )!.entity;
+    return entity.startsWith("scene.") ? affectedLights(entity) : [entity];
+  }
+  return "entity" in action ? [action.entity] : [];
+}
+function effectProgress(key: string, sessionId: string) {
+  const progress = key.slice(sessionId.length + 1).split(":")[0];
+  return progress === "!start" ? -1 : Number(progress);
+}
+async function prepareEffects(
+  id: string,
+  prefix: string,
+  replacementTargets?: string[],
+) {
+  const previous = preparingEffects.get(id) || Promise.resolve();
+  const preparing = previous
+    .catch(() => {})
+    .then(async () => {
+      const incoming = pending(id).filter((run) => run.id.startsWith(prefix));
+      const targets = new Set(
+        (
+          replacementTargets ||
+          (await Promise.all(
+            incoming.map((run) => effectTargets(id, JSON.parse(run.payload))),
+          ))
+        ).flat(),
+      );
+      const older = db
+        .select()
+        .from(actionRuns)
+        .where(eq(actionRuns.session_id, id))
+        .all()
+        .filter(
+          (run) =>
+            !run.id.startsWith(prefix) &&
+            (replacementTargets !== undefined ||
+              effectProgress(run.id, id) < effectProgress(prefix, id)) &&
+            ["pending", "running", "failed", "looping"].includes(run.status),
+        );
+      for (const run of older) {
+        const action = JSON.parse(run.payload);
+        if (action.type === "lights") {
+          const groups = [];
+          for (const group of action.groups) {
+            if (!replacementTargets && group.loop === "next-challenge")
+              continue;
+            if (!targets.size) {
+              groups.push(group);
+              continue;
+            }
+            const resources = await effectTargets(id, {
+              type: "lights",
+              groups: [group],
+            });
+            if (!resources.some((entity) => targets.has(entity)))
+              groups.push(group);
+            else if (
+              !group.steps.some(
+                (step: { mode: string }) => step.mode === "scene",
+              )
+            ) {
+              const entities = group.entities.filter(
+                (entity: string) => !targets.has(entity),
+              );
+              if (entities.length) groups.push({ ...group, entities });
+            }
+          }
+          if (JSON.stringify(groups) === JSON.stringify(action.groups))
+            continue;
+          if (groups.length) {
+            db.update(actionRuns)
+              .set({ payload: JSON.stringify({ ...action, groups }) })
+              .where(eq(actionRuns.id, run.id))
+              .run();
+            await lightLoops.takeOver([...targets]);
+            continue;
+          }
+        } else if (
+          !targets.size ||
+          !(await effectTargets(id, action)).some((entity) =>
+            targets.has(entity),
+          )
+        )
+          continue;
+        db.update(actionRuns)
+          .set({ status: "done", error: null })
+          .where(eq(actionRuns.id, run.id))
+          .run();
+        effectControllers.get(run.id)?.abort();
+        await lightLoops.stopAction(run.id);
+        await effectDone.get(run.id);
+        effectControllers.delete(run.id);
+      }
+      for (const run of incoming)
+        db.update(actionRuns)
+          .set({ status: "pending" })
+          .where(
+            and(eq(actionRuns.id, run.id), eq(actionRuns.status, "queued")),
+          )
+          .run();
+    });
+  preparingEffects.set(id, preparing);
+  try {
+    await preparing;
+  } catch (error) {
+    if (!closing)
+      for (const run of pending(id).filter(
+        (run) => run.id.startsWith(prefix) && run.status === "queued",
+      ))
+        db.update(actionRuns)
+          .set({
+            status: "failed",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not prepare room effects",
+          })
+          .where(eq(actionRuns.id, run.id))
+          .run();
+    throw error;
+  } finally {
+    if (preparingEffects.get(id) === preparing) preparingEffects.delete(id);
+  }
+}
 async function runActions(id: string) {
   while (!closing) {
-    // Re-read after each effect: QR discoveries can enqueue more while we await it.
-    const run = pending(id)[0];
+    // Preserve order within a completion, while newer completions run independently.
+    const queued = pending(id);
+    const batch = (key: string) => key.slice(0, key.lastIndexOf(":"));
+    const run = queued.find(
+      (candidate, index) =>
+        candidate.status === "pending" &&
+        !queued
+          .slice(0, index)
+          .some((earlier) => batch(earlier.id) === batch(candidate.id)),
+    );
     if (!run || session(id).status !== "running") break;
-    if (run.status !== "pending") break;
     const claimed = db
       .update(actionRuns)
       .set({ status: "running", error: null })
       .where(and(eq(actionRuns.id, run.id), eq(actionRuns.status, "pending")))
       .run();
     if (!claimed.changes) break;
+    const controller = new AbortController();
+    effectControllers.set(run.id, controller);
+    let finish!: () => void;
+    effectDone.set(
+      run.id,
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
     try {
       const action = JSON.parse(run.payload);
-      if (action.type === "speech") await speak(action);
-      else if (action.type === "vacuum") await moveVacuum(action);
+      if (action.type === "speech") await speak(action, controller.signal);
+      else if (action.type === "vacuum")
+        await moveVacuum(action, controller.signal);
       else if (action.type === "lights") {
         const transition = lightTransitionSchema.parse(action);
         await Promise.all(
@@ -321,15 +495,35 @@ async function runActions(id: string) {
               service: string,
               data: Record<string, unknown>,
             ) => {
-              await ha(`services/${domain}/${service}`, data);
+              controller.signal.throwIfAborted();
+              await ha(
+                `services/${domain}/${service}`,
+                data,
+                controller.signal,
+              );
             };
+            if (controller.signal.aborted || closing) return;
+            const latest = db
+              .select()
+              .from(actionRuns)
+              .where(eq(actionRuns.id, run.id))
+              .get();
+            if (
+              !latest ||
+              latest.status !== "running" ||
+              !JSON.parse(latest.payload).groups.some(
+                (current: unknown) =>
+                  JSON.stringify(current) === JSON.stringify(group),
+              )
+            )
+              return;
             await lightLoops.start(
               id,
               run.id,
               group,
               send,
               (error) => {
-                if (closing) return;
+                if (closing || controller.signal.aborted) return;
                 db.update(actionRuns)
                   .set({
                     status: "failed",
@@ -358,12 +552,8 @@ async function runActions(id: string) {
               entities,
               () =>
                 !closing &&
-                session(id).status === "running" &&
-                db
-                  .select()
-                  .from(actionRuns)
-                  .where(eq(actionRuns.id, run.id))
-                  .get()?.status !== "failed",
+                !controller.signal.aborted &&
+                session(id).status === "running",
             );
           }),
         );
@@ -388,7 +578,10 @@ async function runActions(id: string) {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ entity_id: control.entity }),
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(8000),
+            ]),
           },
         );
         if (!result.ok)
@@ -400,6 +593,8 @@ async function runActions(id: string) {
         .run();
       event(id, "Completion action succeeded");
     } catch (error) {
+      if (closing) return;
+      if (controller.signal.aborted) continue;
       db.update(actionRuns)
         .set({
           status: "failed",
@@ -410,6 +605,10 @@ async function runActions(id: string) {
       await lightLoops.stopAction(run.id);
       event(id, "Completion action failed; game master retry required");
       break;
+    } finally {
+      finish();
+      effectDone.delete(run.id);
+      if (!lightLoops.hasAction(run.id)) effectControllers.delete(run.id);
     }
   }
 }
@@ -444,9 +643,6 @@ async function complete(
         ? "This code has already been used."
         : "This code is not valid here.",
     );
-  // Physical discoveries remain usable while room effects run or await retry.
-  if (area.kind !== "qr" && pending(id).length)
-    throw new Error("Systems are responding. Try again in a moment.");
   nextUnlock(game.areas.indexOf(area), code, game);
   const progress = area.completesGame ? game.areas.length : s.progress + 1;
   db.transaction((tx) => {
@@ -488,6 +684,7 @@ async function complete(
         .values({
           id: `${id}:${s.progress}:${index}`,
           session_id: id,
+          status: "queued",
           payload: JSON.stringify(action),
         })
         .run();
@@ -497,14 +694,15 @@ async function complete(
       .run();
   });
   const effects = async () => {
-    await lightLoops.stopSession(id, progress < game.areas.length);
+    await prepareEffects(id, `${id}:${s.progress}:`);
+    if (closing) return;
+    await lightLoops.stopSession(id, true, s.progress);
     if (!closing) await runActions(id);
   };
   if (waitForEffects) await effects();
   else
     void effects().catch(() => {
-      if (!closing)
-        event(id, "Opening room actions could not start; retry required");
+      if (!closing) event(id, "Room actions could not start; retry required");
     });
 }
 export async function handleCallback(request: Request) {
@@ -530,6 +728,7 @@ export async function handleCallback(request: Request) {
       String(body.answer || ""),
       true,
       String(body.challengeId || ""),
+      false,
     );
     return reply({ ok: true });
   } catch (error) {
@@ -553,10 +752,7 @@ function validWriteOrigin(request: Request) {
 function voiceAccess(request: Request, challengeId: string) {
   const p = player(request);
   if (!p) throw new Error("Join a game first.");
-  if (
-    session(p.session_id).status !== "running" ||
-    pending(p.session_id).length
-  )
+  if (session(p.session_id).status !== "running")
     throw new Error("Voice connection is temporarily unavailable.");
   const area = availableChallenges(
     definition(p.session_id),
@@ -953,6 +1149,7 @@ export async function handle(request: Request) {
         String(body.code || ""),
         false,
         body.challengeId,
+        false,
       );
       return reply({ ok: true });
     }
@@ -1008,12 +1205,16 @@ export async function handle(request: Request) {
         throw new Error(
           "An action is running or was interrupted. Wait for completion; interrupted actions become retryable after a server restart.",
         );
-      db.update(actionRuns)
-        .set({ status: "pending", error: null })
-        .where(
-          and(eq(actionRuns.session_id, id), eq(actionRuns.status, "failed")),
-        )
-        .run();
+      const retries = pending(id).filter((run) => run.status === "failed");
+      for (const run of retries)
+        db.update(actionRuns)
+          .set({ status: "queued", error: null })
+          .where(eq(actionRuns.id, run.id))
+          .run();
+      for (const prefix of new Set(
+        retries.map((run) => run.id.slice(0, run.id.lastIndexOf(":") + 1)),
+      ))
+        await prepareEffects(id, prefix);
       await runActions(id);
       return reply({ ok: true });
     }
@@ -1100,10 +1301,18 @@ export async function handle(request: Request) {
       const control = game.controls.find((c) => c.id === body.device);
       if (!control) throw new Error("Unknown control");
       const domain = control.entity.split(".")[0];
-      if (lightLoops.active && (domain === "light" || domain === "scene"))
-        await lightLoops.takeOver(await affectedLights(control.entity));
       if (domain === "light" && typeof body.on !== "boolean")
         throw new Error("Choose lights on or off.");
+      await prepareEffects(
+        String(body.id || "signal-house"),
+        "$manual:",
+        await effectTargets(String(body.id || "signal-house"), {
+          type: "control",
+          controlId: control.id,
+        }),
+      );
+      if (lightLoops.active && (domain === "light" || domain === "scene"))
+        await lightLoops.takeOver(await affectedLights(control.entity));
       const d = {
         domain,
         service: domain === "light" && !body.on ? "turn_off" : "turn_on",

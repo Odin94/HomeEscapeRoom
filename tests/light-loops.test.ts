@@ -76,7 +76,7 @@ test("background loops start without waiting for durations and next challenge st
     await loops.close();
   }
 });
-test("a takeover stops the entire overlapping group and drains an in-flight request before returning", async () => {
+test("a takeover preserves other lamps and drains an in-flight request before returning", async () => {
   const loops = new LightLoops();
   let release!: () => void;
   let entered!: () => void;
@@ -107,6 +107,8 @@ test("a takeover stops the entire overlapping group and drains an in-flight requ
   release();
   await Promise.all([start, stop]);
   assert.equal(taken, true);
+  assert.equal(loops.hasAction("one"), true);
+  await loops.takeOver(["light.one"]);
   assert.equal(loops.hasAction("one"), false);
   await loops.close();
 });
@@ -173,4 +175,37 @@ test("takeover also respects lights affected by a scene outside the declared gro
   await first;
   assert.equal(loops.hasAction("scene"), false);
   await loops.close();
+});
+
+test("partial takeover keeps the same sequence running only on unaffected lamps", async () => {
+  const loops = new LightLoops();
+  const sent: unknown[] = [];
+  let next!: () => void;
+  const secondStep = new Promise<void>((resolve) => {
+    next = resolve;
+  });
+  const original = {
+    ...group,
+    steps: [{ mode: "off" as const, seconds: 0.1 }],
+  };
+  try {
+    await loops.start(
+      "a",
+      "shared",
+      original,
+      async (_domain, _service, data) => {
+        sent.push([...(data.entity_id as string[])]);
+        if (sent.length === 2) next();
+      },
+      () => assert.fail("takeover is not failure"),
+      () => {},
+    );
+    await loops.takeOver(["light.one"]);
+    await secondStep;
+    await loops.stopSession("a");
+    assert.deepEqual(sent, [["light.one", "light.two"], ["light.two"]]);
+    assert.deepEqual(original.entities, ["light.one", "light.two"]);
+  } finally {
+    await loops.close();
+  }
 });

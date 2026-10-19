@@ -81,3 +81,48 @@ test("go-to never cleans; remote failure still stops and exits remote mode", asy
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("replacing timed vacuum movement stops and exits remote mode before returning", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "vacuum-replacement-"));
+  const previousPath = process.env.SETTINGS_PATH;
+  process.env.SETTINGS_PATH = join(directory, "settings.json");
+  const original = globalThis.fetch;
+  const commands: string[] = [];
+  const controller = new AbortController();
+  try {
+    saveSettings({
+      haUrl: "http://ha.test",
+      haToken: "test",
+      adminKey: "test-password",
+      publicUrl: "",
+    });
+    globalThis.fetch = async (_url, init) => {
+      const { command } = JSON.parse(String(init?.body));
+      commands.push(command);
+      if (command === "app_rc_move") controller.abort();
+      return Response.json({});
+    };
+    await assert.rejects(
+      moveVacuum(
+        {
+          type: "vacuum",
+          entity: "vacuum.robot",
+          movement: "forward",
+          seconds: 5,
+        },
+        controller.signal,
+      ),
+    );
+    assert.deepEqual(commands, [
+      "app_rc_start",
+      "app_rc_move",
+      "app_rc_stop",
+      "app_rc_end",
+    ]);
+  } finally {
+    globalThis.fetch = original;
+    if (previousPath === undefined) delete process.env.SETTINGS_PATH;
+    else process.env.SETTINGS_PATH = previousPath;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

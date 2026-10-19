@@ -17,6 +17,18 @@ after(() => {
   closeStore();
   rmSync(directory, { recursive: true, force: true });
 });
+async function eventually(check: () => Promise<void> | void) {
+  const deadline = Date.now() + 2000;
+  while (true) {
+    try {
+      await check();
+      return;
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  }
+}
 test("continuous light groups do not block answers and stop on next completion or overlapping manual controls", async () => {
   const gm = (
     await call({ action: "login", key: "automation-test-key" })
@@ -41,7 +53,10 @@ test("continuous light groups do not block answers and stop on next completion o
         id: `loop-${mode}`,
         name: "Loop test",
         autoStart: true,
-        controls: [{ id: "lamp", name: "Lamp", entity: "light.one" }],
+        controls: [
+          { id: "lamp", name: "Lamp", entity: "light.one" },
+          { id: "lamp2", name: "Other lamp", entity: "light.two" },
+        ],
         areas: [0, 1, 2].map((n) => ({
           id: `area-${n}`,
           name: `Area ${n}`,
@@ -82,6 +97,12 @@ test("continuous light groups do not block answers and stop on next completion o
         ).status,
         200,
       );
+      await eventually(async () =>
+        assert.equal(
+          (await (await call(undefined, player)).json()).automationPending,
+          false,
+        ),
+      );
       let state = await (await call(undefined, player)).json();
       assert.equal(state.automationPending, false);
       assert.equal(
@@ -102,11 +123,24 @@ test("continuous light groups do not block answers and stop on next completion o
       );
       if (mode === "replaced") {
         assert.equal(
+          (await call({ action: "device", id, device: "lamp2", on: true }, gm))
+            .status,
+          200,
+        );
+        assert.equal(
           (await call({ action: "device", id, device: "lamp", on: true }, gm))
             .status,
           200,
         );
       }
+      await eventually(async () =>
+        assert.equal(
+          (await (await call(undefined, gm)).json()).automation.filter(
+            (r: { session_id: string }) => r.session_id === id,
+          ).length,
+          0,
+        ),
+      );
       state = await (await call(undefined, gm)).json();
       assert.equal(
         state.automation.filter(
@@ -116,7 +150,7 @@ test("continuous light groups do not block answers and stop on next completion o
       );
       await call({ action: "status", id, status: "closed" }, gm);
     }
-    assert.equal(sent.length, 3);
+    assert.equal(sent.length, 4);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -226,6 +260,8 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
       adminKey: "automation-test-key",
     });
     globalThis.fetch = async (url, init) => {
+      if (String(url).includes("/api/states/scene."))
+        return Response.json({ attributes: { entity_id: ["light.one"] } });
       if (String(url).endsWith("/api/states"))
         return Response.json([
           {
@@ -235,7 +271,8 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
           },
         ]);
       sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
-      if (failScene) return new Response("", { status: 503 });
+      if (failScene && String(url).includes("/scene/"))
+        return new Response("", { status: 503 });
       return Response.json([]);
     };
     const scan = {
@@ -248,7 +285,15 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
       scans.map((r) => r.status),
       [200, 400],
     );
-    assert.equal(sent.length, 1);
+    await eventually(() => assert.equal(sent.length, 1));
+    await eventually(async () =>
+      assert.equal(
+        (await (await call(undefined, gm)).json()).automation.find(
+          (run: { session_id: string }) => run.session_id === id,
+        )?.status,
+        "failed",
+      ),
+    );
     assert.equal(sent[0].body.entity_id, "scene.escape_room_colors"); // snapshot
     let state = await (await call(undefined, player)).json();
     assert.equal(state.automationPending, true);
@@ -261,24 +306,24 @@ test("QR to scene to colors to Alexa callback is shared, authenticated, retryabl
       challengeId: "light-colors",
       code: "#ff0000|#0000ff|#00ff00|#ffff00",
     };
-    assert.equal((await call(colors, player)).status, 400);
+    assert.equal((await call(colors, player)).status, 200);
+    await eventually(() => assert.equal(sent.length, 2));
+    assert.ok(sent[1].url.endsWith("/services/notify/send_message"));
+    assert.ok(sent[1].body.message.includes("one hand"));
     assert.equal(
       (await call({ action: "retry-actions", id }, player)).status,
       401,
     );
     failScene = false;
     assert.equal((await call({ action: "retry-actions", id }, gm)).status, 200);
-    assert.equal(sent.length, 2);
+    assert.equal(sent.length, 3);
     await call({ action: "retry-actions", id }, gm);
-    assert.equal(sent.length, 2); // successful action is not repeated
+    assert.equal(sent.length, 3); // successful action is not repeated
     assert.equal(
       (await call({ ...colors, code: "#0000ff|#ff0000" }, player)).status,
       400,
     );
-    assert.equal((await call(colors, player)).status, 200);
-    assert.equal(sent.length, 3);
-    assert.ok(sent[2].url.endsWith("/services/notify/send_message"));
-    assert.ok(sent[2].body.message.includes("one hand"));
+    assert.equal((await call(colors, player)).status, 400); // already solved
     assert.equal(
       (await call({ action: "unlock", code: "five" }, player)).status,
       400,
@@ -409,10 +454,12 @@ for (const failEarlier of [false, true])
       );
       release();
       assert.equal((await completion).status, 200);
-      assert.equal(calls, failEarlier ? 1 : 2);
-      assert.equal(
-        (await (await call(undefined, player)).json()).automationPending,
-        failEarlier,
+      await eventually(() => assert.equal(calls, 2));
+      await eventually(async () =>
+        assert.equal(
+          (await (await call(undefined, player)).json()).automationPending,
+          false,
+        ),
       );
       assert.equal(
         (await call({ action: "unlock", code: "next-code" }, player)).status,
@@ -636,3 +683,398 @@ test(
     }
   },
 );
+
+for (const sharedGroup of [false, true])
+  test(
+    `text answers replace overlapping finite effects and preserve unrelated lights in ${sharedGroup ? "the same" : "separate"} groups`,
+    { timeout: 4000 },
+    async () => {
+      const gm = (
+        await call({ action: "login", key: "automation-test-key" })
+      ).headers
+        .get("set-cookie")!
+        .split(";")[0];
+      const originalFetch = globalThis.fetch;
+      const sent: { entity_id: string | string[]; rgb_color?: number[] }[] = [];
+      let id = "";
+      try {
+        saveSettings({
+          haUrl: "http://ha.test",
+          haToken: "test-token",
+          adminKey: "automation-test-key",
+          publicUrl: "",
+        });
+        globalThis.fetch = async (_url, init) => {
+          sent.push(JSON.parse(String(init?.body)));
+          return Response.json([]);
+        };
+        const game = {
+          id: `answers-during-finite-effects-${sharedGroup}`,
+          name: "Nonblocking effects",
+          autoStart: true,
+          controls: [{ id: "keep", name: "Other lamp", entity: "light.keep" }],
+          areas: [0, 1, 2].map((n) => ({
+            id: `step-${n}`,
+            name: `Step ${n}`,
+            kind: "text",
+            hint: "",
+            description: "",
+            unlockCode: "yes",
+            onComplete:
+              n === 0
+                ? [
+                    {
+                      type: "lights",
+                      groups: (sharedGroup
+                        ? [["light.one", "light.keep"]]
+                        : [["light.one"], ["light.keep"]]
+                      ).map((entities) => ({
+                        entities,
+                        steps: [
+                          { mode: "off", seconds: 3600 },
+                          {
+                            mode: "color",
+                            color: "#ff0000",
+                            brightness: 50,
+                            seconds: 0.1,
+                          },
+                        ],
+                      })),
+                    },
+                  ]
+                : n === 1
+                  ? [
+                      {
+                        type: "lights",
+                        groups: [
+                          {
+                            entities: ["light.one"],
+                            steps: [
+                              {
+                                mode: "color",
+                                color: "#00ff00",
+                                brightness: 50,
+                                seconds: 0.1,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ]
+                  : [],
+          })),
+        };
+        assert.equal(
+          (await call({ action: "save-game", game }, gm)).status,
+          200,
+        );
+        ({ id } = await (
+          await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+        ).json());
+        const player = (await call({ action: "join", id, name: "Ada" })).headers
+          .get("set-cookie")!
+          .split(";")[0];
+        assert.equal(
+          (
+            await call(
+              { action: "unlock", challengeId: "step-0", code: "yes" },
+              player,
+            )
+          ).status,
+          200,
+        );
+        await eventually(() => assert.equal(sent.length, sharedGroup ? 1 : 2));
+        assert.equal(
+          (await (await call(undefined, player)).json()).automationPending,
+          true,
+        );
+        assert.equal(
+          (
+            await call(
+              { action: "unlock", challengeId: "step-1", code: "yes" },
+              player,
+            )
+          ).status,
+          200,
+        );
+        await eventually(() =>
+          assert.ok(sent.some((data) => data.rgb_color?.[1] === 255)),
+        );
+        assert.equal(
+          (
+            await call(
+              { action: "unlock", challengeId: "step-2", code: "yes" },
+              player,
+            )
+          ).status,
+          200,
+        );
+        const state = await (await call(undefined, player)).json();
+        assert.equal(state.player.session.progress, 3);
+        assert.deepEqual(state.storyOrder, ["step-0", "step-1", "step-2"]);
+        assert.equal(state.automationPending, true); // the unrelated lamp keeps its original effect
+        const runs = (
+          await (await call(undefined, gm)).json()
+        ).automation.filter((run: any) => run.session_id === id);
+        const older = runs.find((run: any) => run.id === `${id}:0:0`);
+        assert.equal(older.status, "running");
+        // Manual takeover stops the remaining old effect, without executing its old red flash.
+        assert.equal(
+          (await call({ action: "device", id, device: "keep", on: true }, gm))
+            .status,
+          200,
+        );
+        await eventually(async () =>
+          assert.equal(
+            (await (await call(undefined, player)).json()).automationPending,
+            false,
+          ),
+        );
+        assert.ok(sent.every((data) => data.rgb_color?.[0] !== 255));
+      } finally {
+        if (id) await call({ action: "status", id, status: "closed" }, gm);
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+
+test(
+  "queued effects on a replaced device never replay; unrelated effects and external answers continue",
+  { timeout: 4000 },
+  async () => {
+    const gm = (
+      await call({ action: "login", key: "automation-test-key" })
+    ).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    const originalFetch = globalThis.fetch;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sent: { url: string; body: any }[] = [];
+    let id = "";
+    try {
+      saveSettings({
+        haUrl: "http://ha.test",
+        haToken: "test-token",
+        adminKey: "automation-test-key",
+        publicUrl: "",
+      });
+      globalThis.fetch = async (url, init) => {
+        if (String(url).endsWith("/api/states")) {
+          await held;
+          return Response.json([
+            {
+              entity_id: "notify.room_speak",
+              state: "unknown",
+              attributes: {},
+            },
+          ]);
+        }
+        sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+        return Response.json([]);
+      };
+      const game = {
+        id: "pending-device-replacement",
+        name: "Pending replacement",
+        autoStart: true,
+        controls: [
+          { id: "lamp", name: "Lamp", entity: "light.one" },
+          { id: "keep", name: "Other lamp", entity: "light.keep" },
+        ],
+        areas: [
+          {
+            id: "first",
+            name: "First",
+            kind: "text",
+            hint: "",
+            description: "",
+            unlockCode: "yes",
+            onComplete: [
+              {
+                type: "speech",
+                entity: "notify.room_speak",
+                message: "Keep this message",
+              },
+              { type: "control", controlId: "lamp", on: true },
+              { type: "control", controlId: "keep", on: true },
+            ],
+          },
+          {
+            id: "second",
+            name: "Second",
+            kind: "numbers",
+            hint: "",
+            description: "",
+            unlockCode: "123",
+            onComplete: [{ type: "control", controlId: "lamp", on: false }],
+          },
+          {
+            id: "spoken-answer",
+            name: "External",
+            kind: "external",
+            hint: "",
+            description: "",
+            unlockCode: "five",
+          },
+        ],
+      };
+      assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+      ({ id } = await (
+        await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+      ).json());
+      const player = (await call({ action: "join", id, name: "Ada" })).headers
+        .get("set-cookie")!
+        .split(";")[0];
+      assert.equal(
+        (
+          await call(
+            { action: "unlock", challengeId: "first", code: "yes" },
+            player,
+          )
+        ).status,
+        200,
+      );
+      await eventually(async () =>
+        assert.ok(
+          (await (await call(undefined, gm)).json()).automation.some(
+            (run: any) => run.session_id === id && run.status === "running",
+          ),
+        ),
+      );
+      assert.equal(
+        (
+          await call(
+            { action: "unlock", challengeId: "second", code: "123" },
+            player,
+          )
+        ).status,
+        200,
+      );
+      await eventually(() => assert.equal(sent.length, 1));
+      assert.deepEqual(sent[0].body, { entity_id: "light.one" });
+      assert.ok(sent[0].url.endsWith("/light/turn_off"));
+      const config = await (
+        await call({ action: "callback-config", id }, gm)
+      ).json();
+      assert.equal((await callback(id, config.token)).status, 200);
+      assert.equal(
+        (await (await call(undefined, player)).json()).player.session.progress,
+        3,
+      );
+      release();
+      await eventually(async () =>
+        assert.equal(
+          (await (await call(undefined, player)).json()).automationPending,
+          false,
+        ),
+      );
+      assert.equal(sent.length, 3);
+      assert.ok(sent[1].body.message.includes("Keep this message"));
+      assert.deepEqual(sent[2].body, { entity_id: "light.keep" });
+      await call({ action: "retry-actions", id }, gm);
+      assert.equal(sent.length, 3);
+    } finally {
+      release();
+      if (id) await call({ action: "status", id, status: "closed" }, gm);
+      globalThis.fetch = originalFetch;
+    }
+  },
+);
+
+test("retrying an older failed effect preserves a newer loop on another lamp", async () => {
+  const gm = (
+    await call({ action: "login", key: "automation-test-key" })
+  ).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const originalFetch = globalThis.fetch;
+  let fail = true;
+  let id = "";
+  try {
+    saveSettings({
+      haUrl: "http://ha.test",
+      haToken: "test-token",
+      adminKey: "automation-test-key",
+      publicUrl: "",
+    });
+    globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      return new Response("[]", {
+        status: fail && body.entity_id === "light.one" ? 503 : 200,
+      });
+    };
+    const game = {
+      id: "retry-preserves-newer-loop",
+      name: "Retry ordering",
+      autoStart: true,
+      controls: [{ id: "first", name: "First lamp", entity: "light.one" }],
+      areas: [0, 1, 2].map((n) => ({
+        id: `step-${n}`,
+        name: `Step ${n}`,
+        kind: "text",
+        hint: "",
+        description: "",
+        unlockCode: "yes",
+        onComplete:
+          n === 0
+            ? [{ type: "control", controlId: "first", on: true }]
+            : n === 1
+              ? [
+                  {
+                    type: "lights",
+                    groups: [
+                      {
+                        entities: ["light.two"],
+                        loop: "next-challenge",
+                        steps: [{ mode: "off", seconds: 3600 }],
+                      },
+                    ],
+                  },
+                ]
+              : [],
+      })),
+    };
+    assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+    ({ id } = await (
+      await call({ action: "create", gameId: game.id, name: "Crew" }, gm)
+    ).json());
+    const player = (await call({ action: "join", id, name: "Ada" })).headers
+      .get("set-cookie")!
+      .split(";")[0];
+    await call(
+      { action: "unlock", challengeId: "step-0", code: "yes" },
+      player,
+    );
+    await eventually(async () =>
+      assert.ok(
+        (await (await call(undefined, gm)).json()).automation.some(
+          (run: any) => run.session_id === id && run.status === "failed",
+        ),
+      ),
+    );
+    await call(
+      { action: "unlock", challengeId: "step-1", code: "yes" },
+      player,
+    );
+    await eventually(async () =>
+      assert.ok(
+        (await (await call(undefined, gm)).json()).automation.some(
+          (run: any) => run.session_id === id && run.status === "looping",
+        ),
+      ),
+    );
+    fail = false;
+    assert.equal((await call({ action: "retry-actions", id }, gm)).status, 200);
+    const remaining = (
+      await (await call(undefined, gm)).json()
+    ).automation.filter((run: any) => run.session_id === id);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].status, "looping");
+    assert.equal(remaining[0].id, `${id}:1:0`);
+  } finally {
+    if (id) await call({ action: "status", id, status: "closed" }, gm);
+    globalThis.fetch = originalFetch;
+  }
+});

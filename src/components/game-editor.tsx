@@ -1236,13 +1236,11 @@ export function ChallengeInput({
   code,
   setCode,
   disabled,
-  submitDisabled = disabled,
 }: {
   area: Area;
   code: string;
   setCode: (value: string) => void;
   disabled: boolean;
-  submitDisabled?: boolean;
 }) {
   if (area.kind === "qr" || area.kind === "hidden") return null;
   if (area.kind === "external")
@@ -1323,9 +1321,7 @@ export function ChallengeInput({
             >
               Clear order
             </Button>
-            <Button disabled={disabled || submitDisabled || !code}>
-              Unlock
-            </Button>
+            <Button disabled={disabled || !code}>Unlock</Button>
           </div>
         </>
       ) : (
@@ -1346,7 +1342,7 @@ export function ChallengeInput({
         </label>
       )}
       {!["colors", "symbols"].includes(area.kind) && (
-        <Button disabled={disabled || submitDisabled || !code}>Unlock</Button>
+        <Button disabled={disabled || !code}>Unlock</Button>
       )}
     </>
   );

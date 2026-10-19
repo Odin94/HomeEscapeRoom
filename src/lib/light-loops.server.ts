@@ -8,6 +8,7 @@ type Running = {
   entities: string[];
   controller: AbortController;
   done: Promise<void>;
+  sending?: Promise<void>;
   error?: unknown;
 };
 
@@ -20,11 +21,22 @@ export class LightLoops {
     this.queue = result.catch(() => {});
     return result;
   }
-  async stopSession(session: string, nextChallenge = false) {
+  async stopSession(
+    session: string,
+    nextChallenge = false,
+    beforeProgress?: number,
+  ) {
     await this.stopWhere(
       (run) =>
         run.session === session &&
-        (!nextChallenge || run.group.loop === "next-challenge"),
+        (!nextChallenge || run.group.loop === "next-challenge") &&
+        (beforeProgress === undefined ||
+          Number(
+            run.action
+              .slice(session.length + 1)
+              .split(":")[0]
+              .replace("!start", "-1"),
+          ) < beforeProgress),
     );
   }
   async close() {
@@ -39,9 +51,25 @@ export class LightLoops {
     await Promise.all(runs.map((run) => run.done));
   }
   private async stopOverlapping(entities: string[]) {
-    await this.stopWhere((run) =>
-      run.entities.some((entity) => entities.includes(entity)),
-    );
+    const stop = new Set<Running>();
+    for (const run of this.running) {
+      if (!run.entities.some((entity) => entities.includes(entity))) continue;
+      const remaining = run.group.entities.filter(
+        (entity) => !entities.includes(entity),
+      );
+      // Color/off steps can keep running for the other lamps in the same group.
+      // Scenes are atomic and may affect lights beyond the group's targets.
+      if (
+        remaining.length &&
+        !run.group.steps.some((step) => step.mode === "scene") &&
+        run.entities.every((entity) => run.group.entities.includes(entity))
+      ) {
+        await run.sending?.catch(() => {});
+        run.group.entities = remaining;
+        run.entities = remaining;
+      } else stop.add(run);
+    }
+    await this.stopWhere((run) => stop.has(run));
   }
   async takeOver(entities: string[]) {
     await this.serialize(() => this.stopOverlapping(entities));
@@ -60,6 +88,7 @@ export class LightLoops {
     entities = group.entities,
     active: () => boolean = () => true,
   ): Promise<void> {
+    group = structuredClone(group);
     return this.serialize(async () => {
       await this.stopOverlapping(entities);
       if (!active())
@@ -85,7 +114,8 @@ export class LightLoops {
       run.done = runLightTransition(
         { type: "lights", groups: [group] },
         async (...args) => {
-          await send(...args);
+          run.sending = send(...args);
+          await run.sending;
           ready();
         },
         (ms) =>

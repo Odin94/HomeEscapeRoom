@@ -10,7 +10,7 @@ const speechSchema = z.object({
   entity: z.string().regex(/^notify\.[a-z0-9_]+$/),
   message: z.string().trim().min(1).max(1000),
 });
-export async function ha(path: string, body?: unknown) {
+export async function ha(path: string, body?: unknown, signal?: AbortSignal) {
   const config = settings();
   if (!config.haUrl || !config.haToken)
     throw new Error(
@@ -25,7 +25,9 @@ export async function ha(path: string, body?: unknown) {
         "Content-Type": "application/json",
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(8000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(8000)])
+        : AbortSignal.timeout(8000),
     });
   } catch {
     throw new Error(
@@ -51,8 +53,8 @@ export async function lightTargets(domains = "light|scene") {
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
-export async function speechTargets() {
-  const response = await ha("states");
+export async function speechTargets(signal?: AbortSignal) {
+  const response = await ha("states", undefined, signal);
   const entities = z.array(entitySchema).parse(await response.json());
   return entities
     .filter((entity) => /^notify\..+_(speak|announce)$/.test(entity.entity_id))
@@ -64,9 +66,10 @@ export async function speechTargets() {
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
-export async function speak(value: unknown) {
+export async function speak(value: unknown, signal?: AbortSignal) {
   const input = speechSchema.parse(value);
-  const targets = await speechTargets();
+  const targets = await speechTargets(signal);
+  signal?.throwIfAborted();
   const target = targets.find((item) => item.entity === input.entity);
   if (!target?.available)
     throw new Error(
@@ -77,9 +80,13 @@ export async function speak(value: unknown) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  await ha("services/notify/send_message", {
-    entity_id: input.entity,
-    message,
-  });
+  await ha(
+    "services/notify/send_message",
+    {
+      entity_id: input.entity,
+      message,
+    },
+    signal,
+  );
   return target;
 }
