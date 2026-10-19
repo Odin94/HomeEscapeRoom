@@ -38,3 +38,24 @@ test("unprompted markers without clues stay hidden while visible QR and normal p
     [text, visible],
   );
 });
+
+test("players can prepare text and number answers while effects block submission", async () => {
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { ChallengeInput } = await import("../src/components/game-editor");
+  for (const kind of ["text", "numbers"]) {
+    const html = renderToStaticMarkup(
+      createElement(ChallengeInput, {
+        area: { ...stomp, kind },
+        code: "123",
+        setCode: () => {},
+        disabled: false,
+        submitDisabled: true,
+      }),
+    );
+    const input = html.match(/<input\b[^>]*>/)?.[0];
+    assert.ok(input);
+    assert.doesNotMatch(input, /disabled|readonly/i);
+    assert.match(html, /<button[^>]*disabled=""[^>]*>Unlock<\/button>/);
+  }
+});

@@ -901,6 +901,7 @@ export function App() {
                           className="unlock"
                           onSubmit={(e) => {
                             e.preventDefault();
+                            if (busy || state.automationPending) return;
                             void act({
                               action: "unlock",
                               code,
@@ -947,8 +948,9 @@ export function App() {
                             area={activeArea}
                             code={code}
                             setCode={setCode}
+                            submitDisabled={busy || !!state.automationPending}
                             disabled={
-                              ((busy || !!state.automationPending) &&
+                              (busy &&
                                 activeArea.kind !== "qr" &&
                                 activeArea.kind !== "hidden") ||
                               state.player!.session.status !== "running"
