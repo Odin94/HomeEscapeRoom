@@ -58,3 +58,30 @@ test("player text and number inputs and submission remain enabled during play", 
     assert.doesNotMatch(html, /<button[^>]*disabled/);
   }
 });
+
+test("color cooldown disables submission while leaving the next sequence editable", async () => {
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { ChallengeInput } = await import("../src/components/game-editor");
+  const area = { ...stomp, kind: "colors", choices: ["#ff0000", "#0000ff"] };
+  const render = (retryAt: number) =>
+    renderToStaticMarkup(
+      createElement(ChallengeInput, {
+        area: { ...area, retryAt },
+        code: "#ff0000|#0000ff",
+        setCode: () => {},
+        disabled: false,
+      }),
+    );
+  const waiting = render(Date.now() + 5000);
+  assert.match(waiting, /Try again in 5 seconds/);
+  assert.match(waiting, /<button[^>]*disabled[^>]*>Unlock<\/button>/);
+  assert.doesNotMatch(
+    waiting,
+    /<button[^>]*disabled[^>]*aria-label="Add color/,
+  );
+  assert.doesNotMatch(
+    render(Date.now() - 1),
+    /<button[^>]*disabled[^>]*>Unlock<\/button>/,
+  );
+});

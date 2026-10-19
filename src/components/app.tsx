@@ -228,6 +228,7 @@ export function App() {
       setToast(message);
       return true;
     } catch (e) {
+      await refresh();
       setFailed(true);
       setToast((e as Error).message);
       return false;

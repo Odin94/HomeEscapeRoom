@@ -918,3 +918,94 @@ test("Restart Ship accepts the physical stomp marker regardless of selected chal
   assert.equal(repeated.status, 400);
   assert.match((await repeated.json()).error, /already been used/);
 });
+
+test("wrong color answers enforce a persistent five-second cooldown scoped to the player and challenge", async () => {
+  const login = await call({ action: "login", key: settings().adminKey });
+  const gm = login.headers.get("set-cookie")!.split(";")[0];
+  const game = {
+    id: "color-cooldown",
+    name: "Color cooldown",
+    controls: [],
+    areas: [
+      {
+        id: "colors",
+        name: "Colors",
+        kind: "colors",
+        hint: "Colors",
+        description: "Solved",
+        requires: [],
+        choices: ["#ff0000", "#0000ff"],
+        unlockCode: "#ff0000|#0000ff",
+      },
+      {
+        id: "text",
+        name: "Text",
+        kind: "text",
+        hint: "Text",
+        description: "Solved",
+        requires: [],
+        unlockCode: "text",
+      },
+    ],
+  };
+  assert.equal((await call({ action: "save-game", game }, gm)).status, 200);
+  const { id } = await (
+    await call({ action: "create", name: "Cooldown", gameId: game.id }, gm)
+  ).json();
+  const p = (await call({ action: "join", id, name: "One" })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  const q = (await call({ action: "join", id, name: "Two" })).headers
+    .get("set-cookie")!
+    .split(";")[0];
+  await call({ action: "status", id, status: "running" }, gm);
+  const originalNow = Date.now;
+  const start = originalNow();
+  let now = start;
+  Date.now = () => now;
+  try {
+    assert.equal(
+      (
+        await call(
+          { action: "unlock", challengeId: "colors", code: "#0000ff|#ff0000" },
+          p,
+        )
+      ).status,
+      400,
+    );
+    const state = await (await call(undefined, p)).json();
+    assert.equal(
+      state.areas.find((area: any) => area.id === "colors").retryAt,
+      start + 5000,
+    );
+    const teammate = await (await call(undefined, q)).json();
+    assert.equal(
+      teammate.areas.find((area: any) => area.id === "colors").retryAt,
+      undefined,
+    );
+    const attempt = {
+      action: "unlock",
+      challengeId: "colors",
+      code: "#ff0000|#0000ff",
+    };
+    let blocked = await call(attempt, p);
+    assert.match((await blocked.json()).error, /wait 5 seconds/);
+    now = start + 4999;
+    blocked = await call(attempt, p);
+    assert.match((await blocked.json()).error, /wait 1 seconds/);
+    assert.equal(
+      (await call({ action: "unlock", challengeId: "text", code: "wrong" }, p))
+        .status,
+      400,
+    );
+    assert.equal(
+      (await call({ action: "unlock", challengeId: "text", code: "text" }, p))
+        .status,
+      200,
+    );
+    now = start + 5000;
+    assert.equal((await call(attempt, p)).status, 200);
+  } finally {
+    Date.now = originalNow;
+  }
+});

@@ -26,6 +26,7 @@ export type Area = {
   flowPosition?: { x: number; y: number };
   revealClues?: string[];
   available?: boolean;
+  retryAt?: number;
   solved?: boolean;
   onComplete?: (
     | { type: "timer"; mode: "start" | "extend"; minutes: number }

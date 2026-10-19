@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { AlexaAnswers } from "./alexa-answers.server";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
+  colorAttempts,
   sessionTimers,
   challengeCompletions,
   actionRuns,
@@ -618,6 +619,7 @@ async function complete(
   external: boolean,
   challenge?: string,
   waitForEffects = true,
+  playerToken?: string,
 ) {
   const s = session(id),
     game = definition(id),
@@ -643,7 +645,33 @@ async function complete(
         ? "This code has already been used."
         : "This code is not valid here.",
     );
-  nextUnlock(game.areas.indexOf(area), code, game);
+  const attemptId =
+    playerToken && area.kind === "colors"
+      ? JSON.stringify([playerToken, id, area.id])
+      : undefined;
+  if (attemptId) {
+    const attempt = db
+      .select()
+      .from(colorAttempts)
+      .where(eq(colorAttempts.id, attemptId))
+      .get();
+    if (attempt && attempt.retry_at > Date.now())
+      throw new Error(
+        `Please wait ${Math.ceil((attempt.retry_at - Date.now()) / 1000)} seconds before trying another color answer.`,
+      );
+  }
+  try {
+    nextUnlock(game.areas.indexOf(area), code, game);
+  } catch (error) {
+    if (attemptId) {
+      const retry_at = Date.now() + 5000;
+      db.insert(colorAttempts)
+        .values({ id: attemptId, retry_at })
+        .onConflictDoUpdate({ target: colorAttempts.id, set: { retry_at } })
+        .run();
+    }
+    throw error;
+  }
   const progress = area.completesGame ? game.areas.length : s.progress + 1;
   db.transaction((tx) => {
     const updated = tx
@@ -983,6 +1011,24 @@ export async function handle(request: Request) {
               }
             : {
                 id: area.id,
+                ...(p && area.kind === "colors"
+                  ? {
+                      retryAt: db
+                        .select()
+                        .from(colorAttempts)
+                        .where(
+                          eq(
+                            colorAttempts.id,
+                            JSON.stringify([
+                              cookie(request, "player"),
+                              p.session_id,
+                              area.id,
+                            ]),
+                          ),
+                        )
+                        .get()?.retry_at,
+                    }
+                  : {}),
                 available: available.includes(area.id),
                 solved: completed.includes(area.id),
                 kind:
@@ -1150,6 +1196,7 @@ export async function handle(request: Request) {
         false,
         body.challengeId,
         false,
+        cookie(request, "player"),
       );
       return reply({ ok: true });
     }

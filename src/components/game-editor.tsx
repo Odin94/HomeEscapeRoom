@@ -1242,6 +1242,17 @@ export function ChallengeInput({
   setCode: (value: string) => void;
   disabled: boolean;
 }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (area.kind !== "colors" || !area.retryAt) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(timer);
+  }, [area.kind, area.retryAt]);
+  const retrySeconds =
+    area.kind === "colors"
+      ? Math.max(0, Math.ceil(((area.retryAt || 0) - now) / 1000))
+      : 0;
   if (area.kind === "qr" || area.kind === "hidden") return null;
   if (area.kind === "external")
     return (
@@ -1321,8 +1332,13 @@ export function ChallengeInput({
             >
               Clear order
             </Button>
-            <Button disabled={disabled || !code}>Unlock</Button>
+            <Button disabled={disabled || !code || retrySeconds > 0}>
+              Unlock
+            </Button>
           </div>
+          {retrySeconds > 0 && (
+            <p role="status">Try again in {retrySeconds} seconds.</p>
+          )}
         </>
       ) : (
         <label>
