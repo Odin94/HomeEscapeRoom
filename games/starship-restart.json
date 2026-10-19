@@ -11,7 +11,7 @@
       "name": "Engine password: first part",
       "kind": "text",
       "requires": [],
-      "hint": "The first part of the engine password is a flower from the Westpark partner city. (4)",
+      "hint": "The first part of the engine password is the word for flower in the language of Westpark's most Instagrammable garden. (4)",
       "description": "First engine credential accepted. Keep this word: it is the first of three parts. The engine restart terminal is now available.",
       "unlockCode": "hana",
       "onComplete": [
@@ -28,7 +28,7 @@
       "name": "Emergency power",
       "kind": "qr",
       "requires": [],
-      "hint": "Emergency power comes from a great stomp.",
+      "hint": "Find emergency power beneath a bright, eerie stomper.",
       "description": "Emergency power restored. Emergency protocols are now in effect.",
       "unlockCode": "4b4a0185-b358-4183-a2cb-0f6df14e439f",
       "onComplete": [
@@ -231,7 +231,7 @@
         {
           "type": "speech",
           "entity": "notify.living_room_echo_dot_speak",
-          "message": "Emergency communications online. Distress beacon active. Maintenance unit dispatched."
+          "message": "Emergency communications online. Distress beacon active. The robot is bringing you the next QR code. Scan it to access the maintenance terminal."
         },
         {
           "type": "vacuum",
