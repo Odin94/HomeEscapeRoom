@@ -61,7 +61,6 @@ export function App() {
   const [joinQr, setJoinQr] = useState<Record<string, string>>({});
   const [linkedSession, setLinkedSession] = useState("");
   const [joinSession, setJoinSession] = useState("");
-  const [code, setCode] = useState("");
   const [voiceAnswer, setVoiceAnswer] = useState<{
     session: string;
     challenge: string;
@@ -104,13 +103,22 @@ export function App() {
       ? undefined
       : playableAreas.find((a) => a.available && a.id === challenge) ||
         playableAreas.find((a) => a.available);
+  // Scope drafts to the session and challenge, including automatic transitions.
+  const answerKey = JSON.stringify([state?.player?.session_id, activeArea?.id]);
+  const code = answers[answerKey] || "";
+  const setCode = (value: string) =>
+    setAnswers((previous) => ({ ...previous, [answerKey]: value }));
   useEffect(() => {
     if (
       voiceAnswer &&
       (voiceAnswer.session !== state?.player?.session_id ||
         voiceAnswer.challenge !== activeArea?.id)
     ) {
-      setCode("");
+      const previousKey = JSON.stringify([
+        voiceAnswer.session,
+        voiceAnswer.challenge,
+      ]);
+      setAnswers((previous) => ({ ...previous, [previousKey]: "" }));
       setVoiceAnswer(null);
     }
   }, [voiceAnswer, state?.player?.session_id, activeArea?.id]);
@@ -871,15 +879,9 @@ export function App() {
                         aria-expanded={activeArea?.id === area.id}
                         aria-controls={`challenge-panel-${area.id}`}
                         onClick={() => {
-                          if (activeArea)
-                            setAnswers((previous) => ({
-                              ...previous,
-                              [activeArea.id]: code,
-                            }));
                           const closing = activeArea?.id === area.id;
                           setVoiceAnswer(null);
                           setChallenge(closing ? null : area.id);
-                          setCode(closing ? "" : answers[area.id] || "");
                         }}
                       >
                         <GameMarkdown inline>{area.name}</GameMarkdown>
@@ -906,10 +908,6 @@ export function App() {
                             }).then((ok) => {
                               if (ok || activeArea.kind === "colors") {
                                 setCode("");
-                                setAnswers((previous) => ({
-                                  ...previous,
-                                  [activeArea.id]: "",
-                                }));
                               }
                             });
                           }}
